@@ -1,0 +1,17 @@
+---
+requires_ansible: '>=2.15.0'
+
+action_groups:
+  pocketid:
+    - user
+    - group
+    - client
+    - application_config
+    - scim_service_provider
+    - group_membership
+    - one_time_access_token
+    - client_secret
+    - user_info
+    - group_info
+    - client_info
+    - application_config_info

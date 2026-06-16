@@ -1,0 +1,29 @@
+---
+namespace: trozz
+name: pocketid
+version: 0.1.0
+readme: README.md
+authors:
+  - trozz
+description: >-
+  Manage a Pocket-ID instance (users, groups, OIDC clients, application
+  configuration, SCIM service providers, group memberships, one-time access
+  tokens and client-secret rotation) over its REST API.
+license:
+  - GPL-3.0-or-later
+tags:
+  - identity
+  - oidc
+  - sso
+  - security
+repository: https://github.com/trozz/ansible-module-pocketid
+issues: https://github.com/trozz/ansible-module-pocketid/issues
+homepage: https://github.com/trozz/ansible-module-pocketid
+build_ignore:
+  - docs
+  - tests/output
+  - .git
+  - .github
+  - '*.test'
+  - 'coverage*'
+  - '.gitignore'

@@ -235,7 +235,12 @@ def _resolve_group(client, params):
     if not name:
         return None
     groups = client.list_groups()
-    return find_one_by_key(groups, "name", name)
+    match = find_one_by_key(groups, "name", name)
+    if match is None:
+        return None
+    # The list endpoint returns a lightweight DTO that may omit customClaims;
+    # re-fetch the full group so custom-claim comparison is accurate.
+    return client.get_group(match["id"])
 
 
 def _validate_custom_claims(custom_claims):
@@ -284,6 +289,10 @@ def run(params, client):
         desired["friendlyName"] = params.get("friendly_name")
 
     if existing is None:
+        # The API requires friendlyName on creation; default it to the name so a
+        # caller that omits friendly_name does not hit an HTTP 400. On update an
+        # omitted friendly_name is left untouched (not reset).
+        desired.setdefault("friendlyName", params.get("name"))
         return _create(client, params, desired, custom_claims, check_mode)
 
     return _update(client, existing, desired, custom_claims, check_mode)

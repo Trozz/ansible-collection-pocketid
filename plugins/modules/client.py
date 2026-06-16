@@ -313,7 +313,13 @@ def _resolve_client(params, client):
                 return None
             raise
     clients = client.list_clients()
-    return find_one_by_key(clients, "name", params["name"])
+    match = find_one_by_key(clients, "name", params["name"])
+    if match is None:
+        return None
+    # The list endpoint returns a lightweight DTO (allowedUserGroupsCount, no
+    # populated allowedUserGroups array). Re-fetch the full object so group and
+    # other sub-resource comparisons are accurate (idempotency).
+    return client.get_client(match["id"])
 
 
 def run(params, client):

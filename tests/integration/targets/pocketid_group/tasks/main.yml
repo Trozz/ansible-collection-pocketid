@@ -1,0 +1,82 @@
+---
+# trozz.pocketid.group integration coverage:
+# create / update / custom_claims / idempotency / delete.
+- name: pocketid_group
+  module_defaults:
+    group/trozz.pocketid.pocketid:
+      base_url: "{{ pocketid_base_url }}"
+      api_token: "{{ pocketid_api_token }}"
+      validate_certs: "{{ pocketid_validate_certs }}"
+  vars:
+    test_group_name: ansitest_group
+  block:
+    - name: Create group
+      trozz.pocketid.group:
+        name: "{{ test_group_name }}"
+        friendly_name: Ansible Test Group
+        state: present
+      register: grp_create
+
+    - name: Group was created
+      assert:
+        that:
+          - grp_create is changed
+          - grp_create.group.name == test_group_name
+
+    - name: Create group again (idempotent)
+      trozz.pocketid.group:
+        name: "{{ test_group_name }}"
+        friendly_name: Ansible Test Group
+        state: present
+      register: grp_idem
+
+    - name: Second converge reports no change
+      assert:
+        that:
+          - grp_idem is not changed
+
+    - name: Update friendly_name and custom_claims
+      trozz.pocketid.group:
+        name: "{{ test_group_name }}"
+        friendly_name: Ansible Test Group Renamed
+        custom_claims:
+          tier: gold
+        state: present
+      register: grp_update
+
+    - name: Update reported a change
+      assert:
+        that:
+          - grp_update is changed
+
+    - name: Re-apply update (idempotent)
+      trozz.pocketid.group:
+        name: "{{ test_group_name }}"
+        friendly_name: Ansible Test Group Renamed
+        custom_claims:
+          tier: gold
+        state: present
+      register: grp_update_idem
+
+    - name: Update is idempotent
+      assert:
+        that:
+          - grp_update_idem is not changed
+
+    - name: Delete group
+      trozz.pocketid.group:
+        name: "{{ test_group_name }}"
+        state: absent
+      register: grp_delete
+
+    - name: Delete reported a change
+      assert:
+        that:
+          - grp_delete is changed
+
+  always:
+    - name: Clean up test group
+      trozz.pocketid.group:
+        name: "{{ test_group_name }}"
+        state: absent
+      failed_when: false

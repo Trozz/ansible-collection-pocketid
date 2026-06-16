@@ -1,0 +1,17 @@
+---
+# Template for tests/integration/integration_config.yml.
+#
+# scripts/integration-bootstrap.sh renders the real integration_config.yml from
+# this file (substituting the bootstrap values below). The rendered file is
+# gitignored. ansible-test automatically loads integration_config.yml and makes
+# these variables available to every integration target.
+#
+# You normally do not edit this by hand; run:
+#   bash scripts/integration-bootstrap.sh
+#
+# The fixed token below matches the one seeded into the Pocket-ID api_keys table
+# (stored there as its unsalted SHA-256 hash). validate_certs is false because
+# the test instance is plain HTTP on localhost.
+pocketid_base_url: "@@POCKETID_BASE_URL@@"
+pocketid_api_token: "@@POCKETID_API_TOKEN@@"
+pocketid_validate_certs: false

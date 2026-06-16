@@ -1,0 +1,60 @@
+---
+# trozz.pocketid.application_config integration coverage:
+# overlay a couple of keys, idempotency, and assert unrelated keys are preserved
+# across the read-modify-write (the PUT is destructive-by-omission upstream).
+- name: pocketid_application_config
+  module_defaults:
+    group/trozz.pocketid.pocketid:
+      base_url: "{{ pocketid_base_url }}"
+      api_token: "{{ pocketid_api_token }}"
+      validate_certs: "{{ pocketid_validate_certs }}"
+  block:
+    - name: Read the current application configuration
+      trozz.pocketid.application_config_info:
+      register: cfg_before
+
+    - name: Overlay a couple of keys (app_name + accent_color)
+      trozz.pocketid.application_config:
+        app_name: Ansible Test Pocket-ID
+        accent_color: "#abcdef"
+      register: cfg_overlay
+
+    - name: Overlay reported a change
+      assert:
+        that:
+          - cfg_overlay is changed
+
+    - name: Re-apply the same overlay (idempotent)
+      trozz.pocketid.application_config:
+        app_name: Ansible Test Pocket-ID
+        accent_color: "#abcdef"
+      register: cfg_idem
+
+    - name: Overlay is idempotent
+      assert:
+        that:
+          - cfg_idem is not changed
+
+    - name: Read the configuration back
+      trozz.pocketid.application_config_info:
+      register: cfg_after
+
+    - name: The overlaid keys took effect
+      assert:
+        that:
+          - cfg_after.application_config.appName == 'Ansible Test Pocket-ID'
+          - cfg_after.application_config.accentColor == '#abcdef'
+
+    - name: Unrelated keys present before the overlay are preserved
+      vars:
+        before_keys: "{{ cfg_before.application_config.keys() | list }}"
+        after_keys: "{{ cfg_after.application_config.keys() | list }}"
+      assert:
+        that:
+          - before_keys | difference(['appName', 'accentColor']) | difference(after_keys) | length == 0
+
+  always:
+    - name: Restore the original application name
+      trozz.pocketid.application_config:
+        app_name: "{{ cfg_before.application_config.appName | default('Pocket ID') }}"
+      failed_when: false

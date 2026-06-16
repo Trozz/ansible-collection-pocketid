@@ -1,0 +1,65 @@
+---
+# trozz.pocketid.one_time_access_token integration coverage:
+# imperative + non-idempotent. check mode performs no mint; a real run returns a
+# token exactly once. NOT asserted via converge-twice (every run mints anew).
+- name: pocketid_one_time_access_token
+  module_defaults:
+    group/trozz.pocketid.pocketid:
+      base_url: "{{ pocketid_base_url }}"
+      api_token: "{{ pocketid_api_token }}"
+      validate_certs: "{{ pocketid_validate_certs }}"
+  vars:
+    test_user: ansitest_otat_user
+  block:
+    - name: Create a user to mint a token for
+      trozz.pocketid.user:
+        username: "{{ test_user }}"
+        email: ansitest_otat@example.com
+        state: present
+      register: otat_user
+
+    - name: Mint a token (check mode) - must NOT mint
+      trozz.pocketid.one_time_access_token:
+        user_id: "{{ otat_user.user.id }}"
+        ttl: 15m
+      check_mode: true
+      register: otat_check
+
+    - name: Check mode reports changed but returns no token
+      assert:
+        that:
+          - otat_check is changed
+          - otat_check.token is not defined
+
+    - name: Mint a token (real run)
+      trozz.pocketid.one_time_access_token:
+        user_id: "{{ otat_user.user.id }}"
+        ttl: 15m
+      register: otat_real
+
+    - name: Real run returns a non-empty token exactly once
+      assert:
+        that:
+          - otat_real is changed
+          - otat_real.token is defined
+          - otat_real.token | length > 0
+
+    - name: Mint by username with a numeric TTL
+      trozz.pocketid.one_time_access_token:
+        username: "{{ test_user }}"
+        ttl: 3600
+      register: otat_by_name
+
+    - name: Username form also mints a token
+      assert:
+        that:
+          - otat_by_name is changed
+          - otat_by_name.token is defined
+          - otat_by_name.token | length > 0
+
+  always:
+    - name: Clean up test user
+      trozz.pocketid.user:
+        username: "{{ test_user }}"
+        state: absent
+      failed_when: false

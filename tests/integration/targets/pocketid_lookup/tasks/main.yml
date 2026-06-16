@@ -1,0 +1,94 @@
+---
+# trozz.pocketid lookup plugins coverage:
+# user / group / client / application_config lookups via env-based connection.
+# Lookups are NOT covered by module_defaults; they read the POCKETID_*
+# environment variables (set here via the play environment).
+- name: pocketid_lookup
+  module_defaults:
+    group/trozz.pocketid.pocketid:
+      base_url: "{{ pocketid_base_url }}"
+      api_token: "{{ pocketid_api_token }}"
+      validate_certs: "{{ pocketid_validate_certs }}"
+  environment:
+    POCKETID_BASE_URL: "{{ pocketid_base_url }}"
+    POCKETID_API_TOKEN: "{{ pocketid_api_token }}"
+    POCKETID_VALIDATE_CERTS: "{{ pocketid_validate_certs | string }}"
+  vars:
+    test_user: ansitest_lookup_user
+    test_group_name: ansitest_lookup_group
+    test_client_name: ansitest_lookup_client
+  block:
+    - name: Seed objects for the lookups
+      block:
+        - name: Seed group
+          trozz.pocketid.group:
+            name: "{{ test_group_name }}"
+            friendly_name: Ansible Lookup Group
+            state: present
+        - name: Seed user
+          trozz.pocketid.user:
+            username: "{{ test_user }}"
+            email: ansitest_lookup@example.com
+            state: present
+        - name: Seed client
+          trozz.pocketid.client:
+            name: "{{ test_client_name }}"
+            callback_urls:
+              - https://lookupapp.example.com/callback
+            is_public: false
+            state: present
+
+    # Lookups are not covered by module_defaults and controller-side lookups do
+    # not read the task ``environment:``; connection options are passed inline.
+    - name: user lookup by username (inline connection)
+      assert:
+        that:
+          - >-
+            lookup('trozz.pocketid.user', test_user,
+            base_url=pocketid_base_url, api_token=pocketid_api_token,
+            validate_certs=pocketid_validate_certs).username == test_user
+
+    - name: group lookup by name
+      assert:
+        that:
+          - >-
+            lookup('trozz.pocketid.group', test_group_name,
+            base_url=pocketid_base_url, api_token=pocketid_api_token,
+            validate_certs=pocketid_validate_certs).name == test_group_name
+
+    - name: client lookup by name
+      assert:
+        that:
+          - >-
+            lookup('trozz.pocketid.client', test_client_name,
+            base_url=pocketid_base_url, api_token=pocketid_api_token,
+            validate_certs=pocketid_validate_certs).name == test_client_name
+
+    - name: application_config lookup returns config with secrets redacted
+      vars:
+        app_cfg: >-
+          {{ lookup('trozz.pocketid.application_config',
+          base_url=pocketid_base_url, api_token=pocketid_api_token,
+          validate_certs=pocketid_validate_certs) }}
+      assert:
+        that:
+          - app_cfg.appName is defined
+          - "'smtpPassword' not in app_cfg"
+          - "'ldapBindPassword' not in app_cfg"
+
+  always:
+    - name: Clean up seeded user
+      trozz.pocketid.user:
+        username: "{{ test_user }}"
+        state: absent
+      failed_when: false
+    - name: Clean up seeded group
+      trozz.pocketid.group:
+        name: "{{ test_group_name }}"
+        state: absent
+      failed_when: false
+    - name: Clean up seeded client
+      trozz.pocketid.client:
+        name: "{{ test_client_name }}"
+        state: absent
+      failed_when: false

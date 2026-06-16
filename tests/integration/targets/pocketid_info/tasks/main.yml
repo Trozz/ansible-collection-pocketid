@@ -1,0 +1,124 @@
+---
+# trozz.pocketid info modules coverage:
+# user_info / group_info / client_info / application_config_info return the
+# expected shapes; application_config_info redacts/omits secrets.
+- name: pocketid_info
+  module_defaults:
+    group/trozz.pocketid.pocketid:
+      base_url: "{{ pocketid_base_url }}"
+      api_token: "{{ pocketid_api_token }}"
+      validate_certs: "{{ pocketid_validate_certs }}"
+  vars:
+    test_user: ansitest_info_user
+    test_group_name: ansitest_info_group
+    test_client_name: ansitest_info_client
+  block:
+    - name: Seed a user, group, and client to query
+      block:
+        - name: Seed group
+          trozz.pocketid.group:
+            name: "{{ test_group_name }}"
+            friendly_name: Ansible Info Group
+            state: present
+        - name: Seed user
+          trozz.pocketid.user:
+            username: "{{ test_user }}"
+            email: ansitest_info@example.com
+            state: present
+        - name: Seed client
+          trozz.pocketid.client:
+            name: "{{ test_client_name }}"
+            callback_urls:
+              - https://infoapp.example.com/callback
+            is_public: false
+            state: present
+
+    - name: user_info by username
+      trozz.pocketid.user_info:
+        username: "{{ test_user }}"
+      register: ui
+
+    - name: user_info returns the user and a users list
+      assert:
+        that:
+          - ui is not changed
+          - ui.user is defined
+          - ui.user.username == test_user
+          - ui.users | length >= 1
+
+    - name: group_info by name
+      trozz.pocketid.group_info:
+        name: "{{ test_group_name }}"
+      register: gi
+
+    - name: group_info returns the group and a groups list
+      assert:
+        that:
+          - gi is not changed
+          - gi.group is defined
+          - gi.group.name == test_group_name
+          - gi.groups | length >= 1
+
+    - name: client_info by name
+      trozz.pocketid.client_info:
+        name: "{{ test_client_name }}"
+      register: ci
+
+    - name: client_info returns the client and a clients list
+      assert:
+        that:
+          - ci is not changed
+          - ci.client is defined
+          - ci.client.name == test_client_name
+          - ci.clients | length >= 1
+
+    - name: application_config_info
+      trozz.pocketid.application_config_info:
+      register: aci
+
+    - name: application_config_info returns config and redacts secret keys
+      assert:
+        that:
+          - aci is not changed
+          - aci.application_config is defined
+          - aci.application_config.appName is defined
+          - "'smtpPassword' not in aci.application_config"
+          - "'ldapBindPassword' not in aci.application_config"
+
+    - name: list-all forms (no filter) return lists without changing anything
+      block:
+        - name: All users
+          trozz.pocketid.user_info:
+          register: all_u
+        - name: All groups
+          trozz.pocketid.group_info:
+          register: all_g
+        - name: All clients
+          trozz.pocketid.client_info:
+          register: all_c
+        - name: List-all returns non-empty lists and never reports changed
+          assert:
+            that:
+              - all_u is not changed
+              - all_g is not changed
+              - all_c is not changed
+              - all_u.users | length >= 1
+              - all_g.groups | length >= 1
+              - all_c.clients | length >= 1
+
+  always:
+    - name: Clean up seeded user
+      trozz.pocketid.user:
+        username: "{{ test_user }}"
+        state: absent
+      failed_when: false
+    - name: Clean up seeded group
+      trozz.pocketid.group:
+        name: "{{ test_group_name }}"
+        state: absent
+      failed_when: false
+    - name: Clean up seeded client
+      trozz.pocketid.client:
+        name: "{{ test_client_name }}"
+        state: absent
+      failed_when: false

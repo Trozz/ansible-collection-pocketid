@@ -1,0 +1,134 @@
+---
+# trozz.pocketid.user integration coverage:
+# create / update / idempotency / check-mode / groups + custom_claims / delete.
+- name: pocketid_user
+  module_defaults:
+    group/trozz.pocketid.pocketid:
+      base_url: "{{ pocketid_base_url }}"
+      api_token: "{{ pocketid_api_token }}"
+      validate_certs: "{{ pocketid_validate_certs }}"
+  vars:
+    test_username: ansitest_user
+    test_group_name: ansitest_user_group
+  block:
+    - name: Create a group to attach the user to
+      trozz.pocketid.group:
+        name: "{{ test_group_name }}"
+        friendly_name: Ansible Test User Group
+        state: present
+      register: grp
+
+    - name: Create user (check mode)
+      trozz.pocketid.user:
+        username: "{{ test_username }}"
+        email: ansitest_user@example.com
+        first_name: Ansi
+        last_name: Test
+        state: present
+      check_mode: true
+      register: user_check
+
+    - name: Check mode reports a change and writes nothing
+      assert:
+        that:
+          - user_check is changed
+
+    - name: Create user (real)
+      trozz.pocketid.user:
+        username: "{{ test_username }}"
+        email: ansitest_user@example.com
+        first_name: Ansi
+        last_name: Test
+        state: present
+      register: user_create
+
+    - name: User was created
+      assert:
+        that:
+          - user_create is changed
+          - user_create.user.username == test_username
+
+    - name: Create user again (idempotent)
+      trozz.pocketid.user:
+        username: "{{ test_username }}"
+        email: ansitest_user@example.com
+        first_name: Ansi
+        last_name: Test
+        state: present
+      register: user_idem
+
+    - name: Second converge reports no change
+      assert:
+        that:
+          - user_idem is not changed
+
+    - name: Update user with groups and custom_claims
+      trozz.pocketid.user:
+        username: "{{ test_username }}"
+        email: ansitest_user@example.com
+        first_name: Ansi
+        last_name: Tested
+        groups:
+          - "{{ test_group_name }}"
+        custom_claims:
+          department: engineering
+        state: present
+      register: user_update
+
+    - name: Update reported a change
+      assert:
+        that:
+          - user_update is changed
+
+    - name: Re-apply groups + custom_claims (idempotent)
+      trozz.pocketid.user:
+        username: "{{ test_username }}"
+        email: ansitest_user@example.com
+        first_name: Ansi
+        last_name: Tested
+        groups:
+          - "{{ test_group_name }}"
+        custom_claims:
+          department: engineering
+        state: present
+      register: user_update_idem
+
+    - name: Group + claim update is idempotent
+      assert:
+        that:
+          - user_update_idem is not changed
+
+    - name: Delete user
+      trozz.pocketid.user:
+        username: "{{ test_username }}"
+        state: absent
+      register: user_delete
+
+    - name: Delete reported a change
+      assert:
+        that:
+          - user_delete is changed
+
+    - name: Delete user again (idempotent absent)
+      trozz.pocketid.user:
+        username: "{{ test_username }}"
+        state: absent
+      register: user_delete_idem
+
+    - name: Second delete reports no change
+      assert:
+        that:
+          - user_delete_idem is not changed
+
+  always:
+    - name: Clean up test user
+      trozz.pocketid.user:
+        username: "{{ test_username }}"
+        state: absent
+      failed_when: false
+
+    - name: Clean up test group
+      trozz.pocketid.group:
+        name: "{{ test_group_name }}"
+        state: absent
+      failed_when: false

@@ -1,0 +1,112 @@
+---
+# trozz.pocketid.client integration coverage:
+# create confidential client (secret returned once) / update without rotation /
+# allowed_user_groups / idempotency / delete.
+- name: pocketid_client
+  module_defaults:
+    group/trozz.pocketid.pocketid:
+      base_url: "{{ pocketid_base_url }}"
+      api_token: "{{ pocketid_api_token }}"
+      validate_certs: "{{ pocketid_validate_certs }}"
+  vars:
+    test_client_name: ansitest_client
+    test_group_name: ansitest_client_group
+  block:
+    - name: Create a group for allowed_user_groups
+      trozz.pocketid.group:
+        name: "{{ test_group_name }}"
+        friendly_name: Ansible Test Client Group
+        state: present
+
+    - name: Create confidential client
+      trozz.pocketid.client:
+        name: "{{ test_client_name }}"
+        callback_urls:
+          - https://app.example.com/callback
+        is_public: false
+        state: present
+      register: client_create
+
+    - name: Client created and secret returned exactly once
+      assert:
+        that:
+          - client_create is changed
+          - client_create.client.name == test_client_name
+          - client_create.client_secret is defined
+          - client_create.client_secret | length > 0
+
+    - name: Re-apply client (idempotent, no secret rotation)
+      trozz.pocketid.client:
+        name: "{{ test_client_name }}"
+        callback_urls:
+          - https://app.example.com/callback
+        is_public: false
+        state: present
+      register: client_idem
+
+    - name: Second converge reports no change and no new secret
+      assert:
+        that:
+          - client_idem is not changed
+          - client_idem.client_secret is not defined
+
+    - name: Update client (add a callback) without rotating the secret
+      trozz.pocketid.client:
+        name: "{{ test_client_name }}"
+        callback_urls:
+          - https://app.example.com/callback
+          - https://app.example.com/callback2
+        is_public: false
+        is_group_restricted: true
+        allowed_user_groups:
+          - "{{ test_group_name }}"
+        state: present
+      register: client_update
+
+    - name: Update reported a change and did not return a new secret
+      assert:
+        that:
+          - client_update is changed
+          - client_update.client_secret is not defined
+
+    - name: Re-apply update (idempotent)
+      trozz.pocketid.client:
+        name: "{{ test_client_name }}"
+        callback_urls:
+          - https://app.example.com/callback
+          - https://app.example.com/callback2
+        is_public: false
+        is_group_restricted: true
+        allowed_user_groups:
+          - "{{ test_group_name }}"
+        state: present
+      register: client_update_idem
+
+    - name: Update is idempotent
+      assert:
+        that:
+          - client_update_idem is not changed
+
+    - name: Delete client
+      trozz.pocketid.client:
+        name: "{{ test_client_name }}"
+        state: absent
+      register: client_delete
+
+    - name: Delete reported a change
+      assert:
+        that:
+          - client_delete is changed
+
+  always:
+    - name: Clean up test client
+      trozz.pocketid.client:
+        name: "{{ test_client_name }}"
+        state: absent
+      failed_when: false
+
+    - name: Clean up test group
+      trozz.pocketid.group:
+        name: "{{ test_group_name }}"
+        state: absent
+      failed_when: false

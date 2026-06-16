@@ -1,0 +1,146 @@
+---
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+  workflow_dispatch:
+
+# ansible-test requires the collection to live at a path ending in
+# ansible_collections/<namespace>/<name>. Every job checks the repo out there
+# and runs ansible-test from that directory.
+env:
+  COLLECTION_PATH: ansible_collections/trozz/pocketid
+
+jobs:
+  sanity:
+    name: Sanity (ansible-core ${{ matrix.ansible }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ansible:
+          - stable-2.17
+          - stable-2.18
+          - stable-2.19
+    steps:
+      - name: Check out the collection
+        uses: actions/checkout@v4
+        with:
+          path: ${{ env.COLLECTION_PATH }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-sanity-${{ matrix.ansible }}-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            pip-sanity-${{ matrix.ansible }}-
+
+      - name: Install ansible-core
+        run: python -m pip install "https://github.com/ansible/ansible/archive/${{ matrix.ansible }}.tar.gz" --disable-pip-version-check
+
+      - name: Run sanity tests
+        working-directory: ${{ env.COLLECTION_PATH }}
+        run: ansible-test sanity --docker -v --color
+
+  units:
+    name: Units (ansible-core ${{ matrix.ansible }}, py ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ansible: stable-2.17
+            python: "3.11"
+          - ansible: stable-2.18
+            python: "3.11"
+          - ansible: stable-2.19
+            python: "3.12"
+    steps:
+      - name: Check out the collection
+        uses: actions/checkout@v4
+        with:
+          path: ${{ env.COLLECTION_PATH }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-units-${{ matrix.ansible }}-${{ matrix.python }}-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            pip-units-${{ matrix.ansible }}-${{ matrix.python }}-
+
+      - name: Install ansible-core
+        run: python -m pip install "https://github.com/ansible/ansible/archive/${{ matrix.ansible }}.tar.gz" --disable-pip-version-check
+
+      - name: Run unit tests
+        working-directory: ${{ env.COLLECTION_PATH }}
+        run: ansible-test units --docker -v --color --python ${{ matrix.python }}
+
+  integration:
+    name: Integration (pocket-id ${{ matrix.pocket_id.label }})
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.pocket_id.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        pocket_id:
+          # v2 is pinned and blocking.
+          - label: v2
+            image: ghcr.io/pocket-id/pocket-id:v2
+            experimental: false
+          # :next is informational only.
+          - label: next
+            image: ghcr.io/pocket-id/pocket-id:next
+            experimental: true
+    steps:
+      - name: Check out the collection
+        uses: actions/checkout@v4
+        with:
+          path: ${{ env.COLLECTION_PATH }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-integration-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            pip-integration-
+
+      - name: Install ansible-core
+        run: python -m pip install "https://github.com/ansible/ansible/archive/stable-2.18.tar.gz" --disable-pip-version-check
+
+      - name: Install sqlite3
+        run: sudo apt-get update && sudo apt-get install -y sqlite3
+
+      - name: Bootstrap Pocket-ID (start, seed, smoke check)
+        working-directory: ${{ env.COLLECTION_PATH }}
+        env:
+          POCKET_ID_IMAGE: ${{ matrix.pocket_id.image }}
+        run: bash scripts/integration-bootstrap.sh
+
+      - name: Run integration tests
+        working-directory: ${{ env.COLLECTION_PATH }}
+        run: ansible-test integration --local -v --color --allow-unsupported
+
+      - name: Tear down Pocket-ID
+        if: always()
+        working-directory: ${{ env.COLLECTION_PATH }}
+        run: bash scripts/integration-bootstrap.sh --down

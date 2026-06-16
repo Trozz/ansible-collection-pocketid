@@ -90,6 +90,35 @@ Set connection options once for all modules with `module_defaults` and the
 `user`, `group`, `client`, `application_config` — the same reads usable inline,
 e.g. `lookup('trozz.pocketid.user', 'alice')`.
 
+## Testing
+
+All tests run with `ansible-test`, which requires the collection at a path
+ending in `ansible_collections/trozz/pocketid` (see Installation).
+
+```bash
+# Sanity (validate-modules, docs, import, no_log checks)
+ansible-test sanity --docker -v
+
+# Unit tests (pytest via ansible-test, mocking open_url)
+ansible-test units --docker -v
+# or directly with pytest:
+pip install -r tests/unit/requirements.txt && pytest tests/unit
+
+# Integration (live Pocket-ID in Docker on localhost:1411)
+bash scripts/integration-bootstrap.sh     # start + seed admin/API key + smoke check
+ansible-test integration --local -v
+bash scripts/integration-bootstrap.sh --down
+```
+
+`scripts/integration-bootstrap.sh` starts the `docker-compose.test.yml` stack
+(`ghcr.io/pocket-id/pocket-id:v2` by default; override with `POCKET_ID_IMAGE`),
+seeds an admin user and an API key into the SQLite DB (schema-aware), runs an
+authenticated smoke check, and renders `tests/integration/integration_config.yml`
+from its template. It requires `docker`, `sqlite3`, and `curl`. See
+[tests/integration/targets/README.md](tests/integration/targets/README.md) for
+details. CI runs sanity + units on every push and integration across the
+Pocket-ID `v2` (blocking) and `next` (informational) images.
+
 ## License
 
 GPL-3.0-or-later. See [LICENSE](LICENSE).

@@ -1,0 +1,141 @@
+---
+# trozz.pocketid.group_membership integration coverage:
+# both forms (user+groups, group+users), authoritative replace, and preserving
+# a user's membership in other groups.
+- name: pocketid_group_membership
+  module_defaults:
+    group/trozz.pocketid.pocketid:
+      base_url: "{{ pocketid_base_url }}"
+      api_token: "{{ pocketid_api_token }}"
+      validate_certs: "{{ pocketid_validate_certs }}"
+  vars:
+    test_user: ansitest_member
+    group_a: ansitest_member_group_a
+    group_b: ansitest_member_group_b
+    group_c: ansitest_member_group_c
+  block:
+    - name: Create groups
+      trozz.pocketid.group:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - "{{ group_a }}"
+        - "{{ group_b }}"
+        - "{{ group_c }}"
+
+    - name: Create user
+      trozz.pocketid.user:
+        username: "{{ test_user }}"
+        email: ansitest_member@example.com
+        state: present
+
+    # Form 1: user + groups
+    - name: Set the user's groups to [a, b] (user form)
+      trozz.pocketid.group_membership:
+        user: "{{ test_user }}"
+        groups:
+          - "{{ group_a }}"
+          - "{{ group_b }}"
+      register: mem_user
+
+    - name: User-form membership reported a change
+      assert:
+        that:
+          - mem_user is changed
+
+    - name: Re-apply the same membership (idempotent)
+      trozz.pocketid.group_membership:
+        user: "{{ test_user }}"
+        groups:
+          - "{{ group_a }}"
+          - "{{ group_b }}"
+      register: mem_user_idem
+
+    - name: User-form membership is idempotent
+      assert:
+        that:
+          - mem_user_idem is not changed
+
+    - name: Authoritative replace to [a] only
+      trozz.pocketid.group_membership:
+        user: "{{ test_user }}"
+        groups:
+          - "{{ group_a }}"
+      register: mem_replace
+
+    - name: Authoritative replace reported a change
+      assert:
+        that:
+          - mem_replace is changed
+
+    # Form 2: group + users. Adding the user to group_c via the group form must
+    # preserve the user's existing membership in group_a (per-group authority).
+    - name: Add the user to group_c (group form)
+      trozz.pocketid.group_membership:
+        group: "{{ group_c }}"
+        users:
+          - "{{ test_user }}"
+      register: mem_group
+
+    - name: Group-form membership reported a change
+      assert:
+        that:
+          - mem_group is changed
+
+    - name: Re-apply group-form membership (idempotent)
+      trozz.pocketid.group_membership:
+        group: "{{ group_c }}"
+        users:
+          - "{{ test_user }}"
+      register: mem_group_idem
+
+    - name: Group-form membership is idempotent
+      assert:
+        that:
+          - mem_group_idem is not changed
+
+    - name: Read back group_a members (should still include the user, preserved)
+      trozz.pocketid.group:
+        name: "{{ group_a }}"
+        state: present
+      register: group_a_state
+
+    - name: Read back group_b members (user should have been removed)
+      trozz.pocketid.group:
+        name: "{{ group_b }}"
+        state: present
+      register: group_b_state
+
+    - name: Read back group_c members (user added via group form)
+      trozz.pocketid.group:
+        name: "{{ group_c }}"
+        state: present
+      register: group_c_state
+
+    - name: Membership was replaced authoritatively while preserving other groups
+      vars:
+        a_members: "{{ group_a_state.group.members | default([]) | map(attribute='username') | list }}"
+        b_members: "{{ group_b_state.group.members | default([]) | map(attribute='username') | list }}"
+        c_members: "{{ group_c_state.group.members | default([]) | map(attribute='username') | list }}"
+      assert:
+        that:
+          - test_user in a_members
+          - test_user in c_members
+          - test_user not in b_members
+
+  always:
+    - name: Clean up test user
+      trozz.pocketid.user:
+        username: "{{ test_user }}"
+        state: absent
+      failed_when: false
+
+    - name: Clean up test groups
+      trozz.pocketid.group:
+        name: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ group_a }}"
+        - "{{ group_b }}"
+        - "{{ group_c }}"
+      failed_when: false

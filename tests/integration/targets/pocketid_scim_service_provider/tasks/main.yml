@@ -1,0 +1,78 @@
+---
+# trozz.pocketid.scim_service_provider integration coverage:
+# CRUD against a client (the SCIM provider is a singleton per OIDC client).
+- name: pocketid_scim_service_provider
+  module_defaults:
+    group/trozz.pocketid.pocketid:
+      base_url: "{{ pocketid_base_url }}"
+      api_token: "{{ pocketid_api_token }}"
+      validate_certs: "{{ pocketid_validate_certs }}"
+  vars:
+    test_client_name: ansitest_scim_client
+  block:
+    - name: Create the OIDC client the SCIM provider attaches to
+      trozz.pocketid.client:
+        name: "{{ test_client_name }}"
+        callback_urls:
+          - https://scimapp.example.com/callback
+        is_public: false
+        state: present
+      register: scim_client
+
+    - name: Create SCIM service provider
+      trozz.pocketid.scim_service_provider:
+        oidc_client_id: "{{ scim_client.client.id }}"
+        endpoint: https://scim.example.com/v2
+        token: ansitest-scim-bearer-token
+        state: present
+      register: scim_create
+
+    - name: SCIM provider created and token is not echoed back
+      assert:
+        that:
+          - scim_create is changed
+          - scim_create.scim_service_provider.endpoint == 'https://scim.example.com/v2'
+          - "'ansitest-scim-bearer-token' not in (scim_create.scim_service_provider | to_json)"
+
+    - name: Re-apply SCIM provider (idempotent, no token change)
+      trozz.pocketid.scim_service_provider:
+        oidc_client_id: "{{ scim_client.client.id }}"
+        endpoint: https://scim.example.com/v2
+        state: present
+      register: scim_idem
+
+    - name: SCIM provider is idempotent
+      assert:
+        that:
+          - scim_idem is not changed
+
+    - name: Update SCIM endpoint
+      trozz.pocketid.scim_service_provider:
+        oidc_client_id: "{{ scim_client.client.id }}"
+        endpoint: https://scim.example.com/v2/new
+        state: present
+      register: scim_update
+
+    - name: SCIM update reported a change
+      assert:
+        that:
+          - scim_update is changed
+          - scim_update.scim_service_provider.endpoint == 'https://scim.example.com/v2/new'
+
+    - name: Delete SCIM provider
+      trozz.pocketid.scim_service_provider:
+        oidc_client_id: "{{ scim_client.client.id }}"
+        state: absent
+      register: scim_delete
+
+    - name: SCIM delete reported a change
+      assert:
+        that:
+          - scim_delete is changed
+
+  always:
+    - name: Clean up test client (cascades the SCIM provider)
+      trozz.pocketid.client:
+        name: "{{ test_client_name }}"
+        state: absent
+      failed_when: false

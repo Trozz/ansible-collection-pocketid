@@ -1,0 +1,37 @@
+---
+# Pocket-ID test instance for the trozz.pocketid integration suite.
+#
+# Started by scripts/integration-bootstrap.sh, which then seeds the SQLite DB
+# with an admin user and an API key (schema-aware) and runs a pre-flight auth
+# smoke check before any ansible-test target runs.
+#
+# Pocket-ID v1 is EOL: target the v2 image (pinned/blocking) or :next
+# (informational). Override the image with POCKET_ID_IMAGE.
+services:
+  pocket-id:
+    image: ${POCKET_ID_IMAGE:-ghcr.io/pocket-id/pocket-id:v2}
+    container_name: pocket-id-test
+    restart: "no"
+    environment:
+      # Public URL for the OIDC provider (required by v2).
+      APP_URL: http://localhost:1411
+      # Encryption key, required by v2 and must be >= 16 bytes.
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-test-ansible-pocketid-encryption-key}
+      # Trust proxy headers (not needed for local testing).
+      TRUST_PROXY: "false"
+      # MaxMind license key (not needed for testing).
+      MAXMIND_LICENSE_KEY: ""
+      # Run as the invoking user so the bind-mounted DB is writable by sqlite3.
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+    ports:
+      - "1411:1411"
+    volumes:
+      # Shared with the host so the bootstrap can seed the SQLite DB directly.
+      - ./tests/integration/test-data/data:/app/data
+    healthcheck:
+      test: ["CMD", "/app/pocket-id", "healthcheck"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s

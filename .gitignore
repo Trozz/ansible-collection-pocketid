@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Ansible test artifacts
+tests/output/
+*.retry
+
+# Integration test data
+tests/integration/test-data/
+test-data/
+
+# OS / editor
+.DS_Store

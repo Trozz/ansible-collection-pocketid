@@ -30,6 +30,9 @@ Integration tests in the provider seed a SQLite database with a fixed token whos
 sha256 hash is inserted directly (`scripts/prepare-test-db.sh`, token
 `test-terraform-provider-token-123456789`). We mirror this approach.
 
+Pocket-ID v1 is end-of-life. Integration tests target the `v2` and `next`
+Pocket-ID images only.
+
 ## Non-Goals
 
 - Auto-generating modules from an OpenAPI spec (hand-written, idiomatic modules
@@ -121,9 +124,15 @@ excluded from diffing.
   `allowed_user_groups`, and federated identity `credentials`. The client
   `secret` is returned on create for confidential clients; `regenerate_secret:
   true` is an opt-in, non-idempotent action (documented, `no_log`).
-- **`application_config`** — singleton. Declarative partial update merged onto the
-  current configuration. Secret fields (`smtp_password`, `ldap_bind_password`)
-  are `no_log`. The full writable key set from `ApplicationConfig` is supported.
+- **`application_config`** — singleton. The Pocket-ID
+  `PUT /api/application-configuration` is **all-or-nothing**: its
+  `AppConfigUpdateDto` marks many keys `required` (several with `oneof`
+  constraints), so a partial body is rejected. The module therefore uses a
+  **read-modify-write overlay**: it GETs the current config, overlays the keys
+  the user specified, and PUTs the complete DTO. Users declare only what they
+  want to change; unspecified keys retain their current value. Secret fields
+  (`smtp_password`, `ldap_bind_password`) are `no_log`. The full writable key set
+  from `ApplicationConfig` / `AppConfigUpdateDto` is supported.
 - **`scim_service_provider`** — `endpoint`, `token` (`no_log`),
   `oidc_client_id`; full CRUD.
 - **`one_time_access_token`** — generates a one-time access token for a user.
@@ -172,8 +181,10 @@ excluded from diffing.
 - **Integration**: `ansible-test integration` targets per module against a live
   Pocket-ID started via docker-compose. The database is seeded with a fixed
   token whose sha256 hash is inserted directly into SQLite, mirroring
-  `scripts/prepare-test-db.sh`. A GitHub Actions workflow runs sanity + units on
-  every push and integration across a small `ansible-core` version matrix.
+  `scripts/prepare-test-db.sh`. Pocket-ID v1 is EOL, so tests run against the
+  `v2` and `next` images. A GitHub Actions workflow runs sanity + units on every
+  push and integration across a matrix of Pocket-ID image (`v2`, `next`) and a
+  small `ansible-core` version range.
 
 ## Key decisions
 

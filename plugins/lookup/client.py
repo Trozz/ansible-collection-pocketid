@@ -10,7 +10,7 @@ __metaclass__ = type
 DOCUMENTATION = r'''
 name: client
 short_description: Look up Pocket-ID OIDC clients by id or name
-version_added: '1.0.0'
+version_added: '0.1.0'
 author:
   - trozz (@trozz)
 description:

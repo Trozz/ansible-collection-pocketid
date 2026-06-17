@@ -11,7 +11,7 @@ DOCUMENTATION = r'''
 name: user
 author:
   - trozz (@trozz)
-version_added: '1.0.0'
+version_added: '0.1.0'
 short_description: Look up Pocket-ID users by id or username
 description:
   - Return the user object for each term, where a term is either an immutable

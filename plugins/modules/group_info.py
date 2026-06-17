@@ -11,7 +11,7 @@ DOCUMENTATION = r'''
 ---
 module: group_info
 short_description: Fetch information about Pocket-ID user groups
-version_added: '1.0.0'
+version_added: '0.1.0'
 description:
   - Read-only module that returns one or more Pocket-ID user groups.
   - Look up a single group by its immutable O(id) or by its natural key O(name)

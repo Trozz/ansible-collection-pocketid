@@ -22,8 +22,16 @@ homepage: https://github.com/trozz/ansible-module-pocketid
 build_ignore:
   - docs
   - tests/output
+  - tests/integration/test-data
+  - tests/integration/integration_config.yml
   - .git
   - .github
+  - .venv
+  - venv
+  - .pytest_cache
+  - .benchmarks
+  - scripts
+  - docker-compose.test.yml
   - '*.test'
   - 'coverage*'
   - '.gitignore'

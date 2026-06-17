@@ -10,7 +10,7 @@ __metaclass__ = type
 DOCUMENTATION = r'''
 name: application_config
 short_description: Look up the Pocket-ID application configuration
-version_added: '1.0.0'
+version_added: '0.1.0'
 description:
   - Returns the global Pocket-ID application configuration singleton as a flat
     dictionary keyed by the server's C(camelCase) field names.

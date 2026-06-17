@@ -11,7 +11,7 @@ DOCUMENTATION = r'''
 ---
 module: group_membership
 short_description: Manage Pocket-ID group membership authoritatively
-version_added: '1.0.0'
+version_added: '0.1.0'
 description:
   - Manage the membership relation between Pocket-ID users and user groups.
   - >-

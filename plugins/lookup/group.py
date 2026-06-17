@@ -10,7 +10,7 @@ __metaclass__ = type
 DOCUMENTATION = r'''
 name: group
 short_description: Look up Pocket-ID user groups by id or unique name
-version_added: '1.0.0'
+version_added: '0.1.0'
 author:
   - trozz (@trozz)
 description:

@@ -26,12 +26,12 @@ jobs:
           - stable-2.19
     steps:
       - name: Check out the collection
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           path: ${{ env.COLLECTION_PATH }}
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
@@ -65,12 +65,12 @@ jobs:
             python: "3.12"
     steps:
       - name: Check out the collection
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           path: ${{ env.COLLECTION_PATH }}
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}
 
@@ -107,12 +107,12 @@ jobs:
             experimental: true
     steps:
       - name: Check out the collection
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           path: ${{ env.COLLECTION_PATH }}
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 

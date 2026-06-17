@@ -8,6 +8,17 @@ This changelog is managed by `antsibull-changelog
 <https://github.com/ansible-community/antsibull-changelog>`_. Add change
 fragments under ``changelogs/fragments/`` rather than editing this file by hand.
 
+v1.0.1
+======
+
+Bugfixes
+--------
+
+- Fix the shared connection-options doc fragment so plugin pages render on
+  Ansible Galaxy. An unbalanced parenthesis inside a ``C()`` markup macro in
+  the ``timeout`` description broke the Galaxy documentation parser for every
+  module and lookup that extends the fragment.
+
 v1.0.0
 ======
 

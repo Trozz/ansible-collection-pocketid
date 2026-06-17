@@ -1,0 +1,60 @@
+---
+name: Examples
+
+# Runnable example playbooks that exercise every module, lookup, and option.
+# Not part of PR-gating CI. Each matrix job gets its own isolated Pocket-ID
+# instance so the playbooks can run in parallel without sharing global state.
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekly, Monday 05:00 UTC.
+    - cron: "0 5 * * 1"
+
+env:
+  COLLECTION_PATH: ansible_collections/trozz/pocketid
+
+jobs:
+  examples:
+    name: Example (${{ matrix.playbook }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        playbook:
+          - users.yml
+          - groups.yml
+          - group_membership.yml
+          - clients.yml
+          - client_secret.yml
+          - scim.yml
+          - one_time_access_token.yml
+          - app_config.yml
+    steps:
+      - name: Check out the collection
+        uses: actions/checkout@v5
+        with:
+          path: ${{ env.COLLECTION_PATH }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install ansible-core
+        run: python -m pip install "https://github.com/ansible/ansible/archive/stable-2.18.tar.gz" --disable-pip-version-check
+
+      - name: Start Pocket-ID
+        working-directory: ${{ env.COLLECTION_PATH }}
+        run: bash scripts/integration-bootstrap.sh
+
+      - name: Run the example playbook
+        working-directory: ${{ env.COLLECTION_PATH }}
+        env:
+          POCKETID_BASE_URL: http://localhost:1411
+          POCKETID_API_TOKEN: test-ansible-pocketid-static-key-0123456789
+        run: ansible-playbook examples/${{ matrix.playbook }}
+
+      - name: Tear down Pocket-ID
+        if: always()
+        working-directory: ${{ env.COLLECTION_PATH }}
+        run: bash scripts/integration-bootstrap.sh --down

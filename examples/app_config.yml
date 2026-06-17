@@ -1,0 +1,148 @@
+---
+# Exercises: trozz.pocketid.application_config (every option),
+# trozz.pocketid.application_config_info, and the
+# trozz.pocketid.application_config lookup.
+#
+# application_config is a global singleton, so there is no create/delete: the
+# module reads, merges, and writes the one configuration object. LDAP is left
+# disabled (ldap_enabled: false) so the server does not attempt a real LDAP
+# connection, while every ldap_* attribute is still written as configuration.
+- name: Manage Pocket-ID application configuration
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  module_defaults:
+    group/trozz.pocketid.pocketid:
+      base_url: "{{ lookup('env', 'POCKETID_BASE_URL') }}"
+      api_token: "{{ lookup('env', 'POCKETID_API_TOKEN') }}"
+      validate_certs: false
+      timeout: 30
+  tasks:
+    - name: Exercise the application configuration modules and lookup
+      block:
+        - name: Apply the full application configuration
+          trozz.pocketid.application_config:
+            app_name: Example Pocket-ID
+            session_duration: "60"
+            home_page_url: https://id.example.com
+            emails_verified: true
+            disable_animations: false
+            allow_own_account_edit: true
+            allow_user_signups: withToken
+            signup_default_user_group_ids: "[]"
+            signup_default_custom_claims: "[]"
+            accent_color: "#3b82f6"
+            require_user_email: true
+            # SMTP configuration (stored, not functionally sent during examples)
+            smtp_host: smtp.example.com
+            smtp_port: "587"
+            smtp_from: no-reply@example.com
+            smtp_user: smtp-user
+            smtp_password: smtp-secret
+            smtp_tls: starttls
+            smtp_skip_cert_verify: false
+            email_one_time_access_as_admin_enabled: true
+            email_one_time_access_as_unauthenticated_enabled: false
+            email_login_notification_enabled: true
+            email_api_key_expiration_enabled: true
+            email_verification_enabled: true
+            # LDAP configuration (disabled, so no connection is attempted)
+            ldap_enabled: false
+            ldap_url: ldaps://ldap.example.com:636
+            ldap_bind_dn: cn=service,dc=example,dc=com
+            ldap_bind_password: ldap-secret
+            ldap_base: dc=example,dc=com
+            ldap_user_search_filter: (objectClass=person)
+            ldap_user_group_search_filter: (objectClass=groupOfNames)
+            ldap_skip_cert_verify: false
+            ldap_attribute_user_unique_identifier: uuid
+            ldap_attribute_user_username: uid
+            ldap_attribute_user_email: mail
+            ldap_attribute_user_first_name: givenName
+            ldap_attribute_user_last_name: sn
+            ldap_attribute_user_display_name: displayName
+            ldap_attribute_user_profile_picture: jpegPhoto
+            ldap_attribute_group_member: member
+            ldap_attribute_group_unique_identifier: uuid
+            ldap_attribute_group_name: cn
+            ldap_admin_group_name: pocket-id-admins
+            ldap_soft_delete_users: true
+          register: applied
+
+        - name: Re-apply without the secrets to prove idempotence
+          # Passwords are write-only and excluded from the diff, so a re-apply of
+          # the non-secret values must report no change.
+          trozz.pocketid.application_config:
+            app_name: Example Pocket-ID
+            session_duration: "60"
+            home_page_url: https://id.example.com
+            emails_verified: true
+            disable_animations: false
+            allow_own_account_edit: true
+            allow_user_signups: withToken
+            signup_default_user_group_ids: "[]"
+            signup_default_custom_claims: "[]"
+            accent_color: "#3b82f6"
+            require_user_email: true
+            smtp_host: smtp.example.com
+            smtp_port: "587"
+            smtp_from: no-reply@example.com
+            smtp_user: smtp-user
+            smtp_tls: starttls
+            smtp_skip_cert_verify: false
+            email_one_time_access_as_admin_enabled: true
+            email_one_time_access_as_unauthenticated_enabled: false
+            email_login_notification_enabled: true
+            email_api_key_expiration_enabled: true
+            email_verification_enabled: true
+            ldap_enabled: false
+            ldap_url: ldaps://ldap.example.com:636
+            ldap_bind_dn: cn=service,dc=example,dc=com
+            ldap_base: dc=example,dc=com
+            ldap_user_search_filter: (objectClass=person)
+            ldap_user_group_search_filter: (objectClass=groupOfNames)
+            ldap_skip_cert_verify: false
+            ldap_attribute_user_unique_identifier: uuid
+            ldap_attribute_user_username: uid
+            ldap_attribute_user_email: mail
+            ldap_attribute_user_first_name: givenName
+            ldap_attribute_user_last_name: sn
+            ldap_attribute_user_display_name: displayName
+            ldap_attribute_user_profile_picture: jpegPhoto
+            ldap_attribute_group_member: member
+            ldap_attribute_group_unique_identifier: uuid
+            ldap_attribute_group_name: cn
+            ldap_admin_group_name: pocket-id-admins
+            ldap_soft_delete_users: true
+          register: reapplied
+
+        - name: Assert the configuration applied and is idempotent
+          ansible.builtin.assert:
+            that:
+              - applied is changed
+              - reapplied is not changed
+
+        - name: Read the configuration back with the info module
+          trozz.pocketid.application_config_info: {}
+          register: cfg_info
+
+        - name: Assert the info module returned the applied app name (secrets omitted)
+          ansible.builtin.assert:
+            that:
+              - cfg_info.application_config.appName == 'Example Pocket-ID'
+
+        - name: Read the full configuration with the lookup plugin
+          ansible.builtin.set_fact:
+            cfg_full: "{{ query('trozz.pocketid.application_config') }}"
+
+        - name: Read only selected keys with the lookup plugin
+          ansible.builtin.set_fact:
+            cfg_keys: "{{ query('trozz.pocketid.application_config', 'appName', 'accentColor') }}"
+
+        - name: Assert the lookup returned the configuration
+          ansible.builtin.assert:
+            that:
+              - cfg_full | length == 1
+              - cfg_full[0].appName == 'Example Pocket-ID'
+              - cfg_keys[0].appName == 'Example Pocket-ID'
+              - cfg_keys[0].accentColor == '#3b82f6'

@@ -1,0 +1,164 @@
+---
+# Exercises: trozz.pocketid.user, trozz.pocketid.user_info, and the
+# trozz.pocketid.user lookup, across every option.
+#
+# Connection comes from POCKETID_BASE_URL / POCKETID_API_TOKEN in the
+# environment (see examples/README.md). validate_certs and timeout are set
+# explicitly here so the connection options are exercised too.
+- name: Manage Pocket-ID users
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  module_defaults:
+    group/trozz.pocketid.pocketid:
+      base_url: "{{ lookup('env', 'POCKETID_BASE_URL') }}"
+      api_token: "{{ lookup('env', 'POCKETID_API_TOKEN') }}"
+      validate_certs: false
+      timeout: 30
+  tasks:
+    - name: Exercise the user modules and lookup
+      block:
+        - name: Create groups used for the user's authoritative group membership
+          trozz.pocketid.group:
+            name: "{{ item }}"
+            state: present
+          loop:
+            - example-engineering
+            - example-platform
+
+        - name: Create a user with every available option
+          trozz.pocketid.user:
+            username: example.user
+            email: example.user@example.com
+            first_name: Example
+            last_name: User
+            display_name: Example User
+            email_verified: true
+            is_admin: false
+            locale: en
+            disabled: false
+            groups:
+              - example-engineering
+              - example-platform
+            custom_claims:
+              department: engineering
+              tier: gold
+            manage_ldap_synced: false
+            state: present
+          register: created
+
+        - name: Re-run the create unchanged to prove idempotence
+          trozz.pocketid.user:
+            username: example.user
+            email: example.user@example.com
+            first_name: Example
+            last_name: User
+            display_name: Example User
+            email_verified: true
+            is_admin: false
+            locale: en
+            disabled: false
+            groups:
+              - example-engineering
+              - example-platform
+            custom_claims:
+              department: engineering
+              tier: gold
+            state: present
+          register: rerun
+
+        - name: Assert the user was created once and is now idempotent
+          ansible.builtin.assert:
+            that:
+              - created is changed
+              - created.user.id is defined
+              - rerun is not changed
+
+        - name: Rename the user in place using its immutable id
+          # Pocket-ID requires an email on every user write, so it is supplied
+          # again here even though only the username is changing.
+          trozz.pocketid.user:
+            id: "{{ created.user.id }}"
+            username: example.renamed
+            email: example.user@example.com
+            state: present
+          register: renamed
+
+        - name: Assert the rename changed the username but kept the id
+          ansible.builtin.assert:
+            that:
+              - renamed is changed
+              - renamed.user.id == created.user.id
+
+        - name: Look up the user by id
+          trozz.pocketid.user_info:
+            id: "{{ created.user.id }}"
+          register: by_id
+
+        - name: Look up the user by username
+          trozz.pocketid.user_info:
+            username: example.renamed
+          register: by_username
+
+        - name: Look up the user by email
+          trozz.pocketid.user_info:
+            email: example.user@example.com
+          register: by_email
+
+        - name: List all users
+          trozz.pocketid.user_info: {}
+          register: all_users
+
+        - name: Assert the info lookups resolved the user
+          ansible.builtin.assert:
+            that:
+              - by_id.user.id == created.user.id
+              - by_username.user.id == created.user.id
+              - by_email.user.id == created.user.id
+              - all_users.users | length >= 1
+
+        - name: Resolve the user with the user lookup plugin (reads POCKETID_* env)
+          ansible.builtin.set_fact:
+            looked_up: "{{ query('trozz.pocketid.user', 'example.renamed') }}"
+
+        - name: Assert the lookup resolved the same user
+          ansible.builtin.assert:
+            that:
+              - looked_up | length == 1
+              - looked_up[0].id == created.user.id
+
+        - name: Clear the user's groups and custom claims authoritatively
+          trozz.pocketid.user:
+            id: "{{ created.user.id }}"
+            username: example.renamed
+            email: example.user@example.com
+            groups: []
+            custom_claims: {}
+            state: present
+          register: cleared
+
+        - name: Assert clearing the collections was a change
+          ansible.builtin.assert:
+            that:
+              - cleared is changed
+
+        - name: Remove the user
+          trozz.pocketid.user:
+            id: "{{ created.user.id }}"
+            username: example.renamed
+            state: absent
+          register: removed
+
+        - name: Assert the user was removed
+          ansible.builtin.assert:
+            that:
+              - removed is changed
+
+      always:
+        - name: Clean up the groups
+          trozz.pocketid.group:
+            name: "{{ item }}"
+            state: absent
+          loop:
+            - example-engineering
+            - example-platform

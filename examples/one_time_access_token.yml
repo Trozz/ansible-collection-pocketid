@@ -1,0 +1,67 @@
+---
+# Exercises: trozz.pocketid.one_time_access_token (by user_id and by username,
+# with both seconds and Go-style duration TTLs). This is an imperative action
+# module: it is not idempotent and returns the token exactly once. Check mode
+# mints nothing.
+- name: Mint Pocket-ID one-time access tokens
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  module_defaults:
+    group/trozz.pocketid.pocketid:
+      base_url: "{{ lookup('env', 'POCKETID_BASE_URL') }}"
+      api_token: "{{ lookup('env', 'POCKETID_API_TOKEN') }}"
+      validate_certs: false
+      timeout: 30
+  tasks:
+    - name: Exercise one-time access token minting
+      block:
+        - name: Create a user to mint tokens for
+          trozz.pocketid.user:
+            username: example.token.user
+            email: example.token.user@example.com
+            state: present
+          register: user
+
+        - name: Mint in check mode (must not actually mint)
+          trozz.pocketid.one_time_access_token:
+            user_id: "{{ user.user.id }}"
+            ttl: "900"
+          check_mode: true
+          register: dry_run
+
+        - name: Assert check mode reports a pending change but mints no token
+          ansible.builtin.assert:
+            that:
+              - dry_run is changed
+              - dry_run.token is not defined
+
+        - name: Mint a token by user id with a TTL in seconds
+          trozz.pocketid.one_time_access_token:
+            user_id: "{{ user.user.id }}"
+            ttl: "900"
+          register: by_id
+
+        - name: Mint a token by username with a Go-style duration TTL
+          trozz.pocketid.one_time_access_token:
+            username: example.token.user
+            ttl: 15m
+          register: by_name
+
+        - name: Assert each real mint returned a token, a link, and reported changed
+          ansible.builtin.assert:
+            that:
+              - by_id is changed
+              - by_id.token is defined
+              - by_id.access_link is defined
+              - by_name is changed
+              - by_name.token is defined
+              - by_id.token != by_name.token
+
+      always:
+        - name: Remove the user
+          trozz.pocketid.user:
+            id: "{{ user.user.id | default('') }}"
+            username: example.token.user
+            state: absent
+          when: user.user.id is defined

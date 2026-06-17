@@ -11,7 +11,7 @@ DOCUMENTATION = r'''
 ---
 module: application_config_info
 short_description: Fetch the Pocket-ID application configuration
-version_added: '0.1.0'
+version_added: '1.0.0'
 description:
   - Read-only module that returns the global Pocket-ID application configuration
     singleton as a flat dictionary keyed by the server's C(camelCase) field names.

@@ -11,7 +11,7 @@ DOCUMENTATION = r'''
 ---
 module: scim_service_provider
 short_description: Manage a SCIM service provider for a Pocket-ID OIDC client
-version_added: '0.1.0'
+version_added: '1.0.0'
 description:
   - Create, update, or delete the SCIM service provider configuration attached to
     an OIDC client in Pocket-ID.

@@ -10,7 +10,7 @@ __metaclass__ = type
 DOCUMENTATION = r"""
 module: client
 short_description: Manage OIDC clients in Pocket-ID
-version_added: '0.1.0'
+version_added: '1.0.0'
 description:
   - Create, update, and delete OIDC clients in a Pocket-ID instance.
   - >-

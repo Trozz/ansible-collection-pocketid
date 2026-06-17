@@ -11,7 +11,7 @@ DOCUMENTATION = r'''
 ---
 module: group
 short_description: Manage Pocket-ID user groups
-version_added: '0.1.0'
+version_added: '1.0.0'
 description:
   - Create, update, and delete user groups on a Pocket-ID instance.
   - >-

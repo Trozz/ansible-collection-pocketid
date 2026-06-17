@@ -50,6 +50,10 @@ jobs:
       - name: Run the example playbook
         working-directory: ${{ env.COLLECTION_PATH }}
         env:
+          # The collection is checked out at <workspace>/ansible_collections/
+          # trozz/pocketid; point ansible-playbook at that root so it can load
+          # the collection (and resolve the module_defaults action group).
+          ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
           POCKETID_BASE_URL: http://localhost:1411
           POCKETID_API_TOKEN: test-ansible-pocketid-static-key-0123456789
         run: ansible-playbook examples/${{ matrix.playbook }}

@@ -71,11 +71,14 @@ class PocketIDError(Exception):
     when available), and the raw response ``body``.
     """
 
-    def __init__(self, message, status=None, body=None):
+    def __init__(self, message, status=None, body=None, retryable=True):
         super().__init__(message)
         self.message = message
         self.status = status
         self.body = body
+        # Transport errors default to retryable-by-type; deterministic failures
+        # (e.g. TLS certificate validation) set this False to fail fast.
+        self.retryable = retryable
 
 
 def _parse_retry_after(value):
@@ -114,6 +117,36 @@ def _parse_retry_after(value):
         return max(1, int(delay))
 
     return DEFAULT_RETRY_AFTER
+
+
+_CERT_ERROR_MARKERS = (
+    "certificate verify failed",
+    "certificate_verify_failed",
+    "certificate has expired",
+    "self signed certificate",
+    "self-signed certificate",
+    "hostname mismatch",
+    "doesn't match",
+    "unable to get local issuer",
+)
+
+
+def _is_cert_validation_error(exc):
+    """Return True when ``exc`` is a deterministic TLS certificate failure.
+
+    Certificate problems (untrusted/expired cert, hostname mismatch) never
+    succeed on retry, so they are surfaced immediately rather than retried.
+    ``SSLValidationError`` (raised by open_url on verification failure) and
+    ``ssl.SSLCertVerificationError`` are always such failures; other SSL/URL
+    errors are matched against the canonical OpenSSL messages.
+    """
+    if isinstance(exc, SSLValidationError):
+        return True
+    cert_verify = getattr(ssl, "SSLCertVerificationError", None)
+    if cert_verify is not None and isinstance(exc, cert_verify):
+        return True
+    text = ("%s %s" % (exc, getattr(exc, "reason", "") or "")).lower()
+    return any(marker in text for marker in _CERT_ERROR_MARKERS)
 
 
 class PocketIDClient(object):
@@ -210,6 +243,10 @@ class PocketIDClient(object):
                 # non-idempotent POST that otherwise disables retries.
                 if exc.status == 429:
                     continue
+                # Deterministic failures (e.g. TLS certificate validation) never
+                # succeed on retry; fail fast.
+                if not exc.retryable:
+                    raise
                 if not allow_retry:
                     raise
                 if exc.status is not None and exc.status not in RETRYABLE_STATUS_CODES:
@@ -232,7 +269,35 @@ class PocketIDClient(object):
             # urllib HTTPError bodies are one-shot: read exactly once, up front.
             raw = exc.read()
             raise self._http_error(exc, raw)
-        except (URLError, SSLValidationError, ConnectionError, socket.timeout, ssl.SSLError) as exc:
+        except (SSLValidationError, ssl.SSLError) as exc:
+            if _is_cert_validation_error(exc):
+                # Deterministic: a bad/untrusted/expired cert or hostname
+                # mismatch will never succeed on retry. Fail fast with guidance.
+                raise PocketIDError(
+                    "TLS certificate validation failed for %s: %s. "
+                    "Set validate_certs: false (or POCKETID_VALIDATE_CERTS=false) "
+                    "to disable verification for a trusted host." % (url, exc),
+                    status=None,
+                    body=None,
+                    retryable=False,
+                )
+            # Other TLS errors (e.g. transient handshake issues) stay retryable.
+            raise PocketIDError(
+                "request to %s failed: %s" % (url, exc),
+                status=None,
+                body=None,
+            )
+        except (URLError, ConnectionError, socket.timeout) as exc:
+            # A URLError may wrap a certificate error; treat those as fail-fast.
+            if _is_cert_validation_error(exc):
+                raise PocketIDError(
+                    "TLS certificate validation failed for %s: %s. "
+                    "Set validate_certs: false (or POCKETID_VALIDATE_CERTS=false) "
+                    "to disable verification for a trusted host." % (url, exc),
+                    status=None,
+                    body=None,
+                    retryable=False,
+                )
             # Transport failures: status None marks them retryable by type.
             raise PocketIDError(
                 "request to %s failed: %s" % (url, exc),

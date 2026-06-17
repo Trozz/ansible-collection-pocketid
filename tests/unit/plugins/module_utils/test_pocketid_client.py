@@ -14,7 +14,10 @@ import json
 
 import pytest
 
+import ssl
+
 from ansible.module_utils.six.moves.urllib.error import HTTPError, URLError
+from ansible.module_utils.urls import SSLValidationError
 
 from ansible_collections.trozz.pocketid.plugins.module_utils import pocketid as mod
 from ansible_collections.trozz.pocketid.plugins.module_utils.pocketid import (
@@ -168,6 +171,37 @@ def test_429_retried_even_for_post_mint(monkeypatch):
     c = _client()
     monkeypatch.setattr(c, "_sleep", lambda s: None)
     assert c.request("POST", "/api/x", allow_retry=False) == {"token": "t"}
+
+
+def test_cert_validation_error_fails_fast(monkeypatch):
+    calls = {"n": 0}
+
+    def fake(*a, **k):
+        calls["n"] += 1
+        raise SSLValidationError("certificate verify failed")
+
+    monkeypatch.setattr(mod, "open_url", fake)
+    c = _client()
+    monkeypatch.setattr(c, "_sleep", lambda s: None)
+    with pytest.raises(PocketIDError) as exc:
+        c.request("GET", "/api/users")
+    assert calls["n"] == 1  # not retried
+    assert "validate_certs" in str(exc.value)
+
+
+def test_cert_error_wrapped_in_urlerror_fails_fast(monkeypatch):
+    calls = {"n": 0}
+
+    def fake(*a, **k):
+        calls["n"] += 1
+        raise URLError(ssl.SSLError("certificate verify failed: self signed certificate"))
+
+    monkeypatch.setattr(mod, "open_url", fake)
+    c = _client()
+    monkeypatch.setattr(c, "_sleep", lambda s: None)
+    with pytest.raises(PocketIDError):
+        c.request("GET", "/api/users")
+    assert calls["n"] == 1
 
 
 def test_429_uses_retry_after(monkeypatch):

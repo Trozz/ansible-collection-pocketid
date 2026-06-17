@@ -100,9 +100,13 @@ instead **raises `urllib.error.HTTPError` on any non-2xx**. The port must:
   branching (urllib bodies are not re-readable), then parse `{error, message}`
   and surface it with `.code` via `fail_json`.
 - **Retry classification by integer status code and exception type, never by
-  substring matching**: retry on `429, 500, 502, 503, 504` and on transport
-  exception types. 4 total attempts (1 initial + 3 retries); pre-attempt backoff
-  `1s / 2s / 4s`.
+  substring matching**: retry on `429, 500, 502, 503, 504` and on transient
+  transport exception types. 4 total attempts (1 initial + 3 retries); pre-attempt
+  backoff `1s / 2s / 4s`.
+- **TLS certificate validation failures fail fast** (one attempt, no retry):
+  they are deterministic, so the client surfaces a `PocketIDError` immediately
+  with guidance to set `validate_certs: false` for a trusted host, rather than
+  retrying 4×. Other (transient) TLS/transport errors remain retryable.
 - `429`: replace backoff with `Retry-After`, parsed as **integer seconds OR
   HTTP-date** (`email.utils.parsedate_to_datetime`), floored at `>0`, defaulting
   to `60s` when absent/unparseable (mirrors Go `parseRetryAfter`).

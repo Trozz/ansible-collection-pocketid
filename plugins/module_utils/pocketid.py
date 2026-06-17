@@ -205,6 +205,11 @@ class PocketIDClient(object):
                 return self._do_single_request(method, url, data)
             except PocketIDError as exc:
                 last_error = exc
+                # A 429 is a pre-processing rejection (rate limited): the request
+                # was never applied, so retrying is always safe, even for a
+                # non-idempotent POST that otherwise disables retries.
+                if exc.status == 429:
+                    continue
                 if not allow_retry:
                     raise
                 if exc.status is not None and exc.status not in RETRYABLE_STATUS_CODES:
@@ -276,7 +281,14 @@ class PocketIDClient(object):
         # Guard empty/whitespace bodies (e.g. 204 from DELETE); never json.loads "".
         if not text or not text.strip():
             return None
-        return json.loads(text)
+        try:
+            return json.loads(text)
+        except ValueError:
+            # A 2xx body that is not valid JSON (e.g. an HTML proxy page) must
+            # surface through the PocketIDError contract, not a raw ValueError.
+            raise PocketIDError(
+                "could not parse JSON response body", status=None, body=text
+            )
 
     def get_paginated(self, endpoint):
         """Page through ``currentPage..totalPages`` and return all data items.

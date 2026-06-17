@@ -11,7 +11,7 @@ DOCUMENTATION = r'''
 ---
 module: application_config
 short_description: Manage the Pocket-ID application configuration singleton
-version_added: '1.0.0'
+version_added: '0.1.0'
 author:
   - trozz (@trozz)
 description:
@@ -447,8 +447,10 @@ def run(params, client):
 
 
 def _is_ui_config_disabled(exc):
-    if getattr(exc, "status", None) == 403:
-        return True
+    # Only a 403 whose body identifies the UI-config lock counts; other 403s
+    # (e.g. a permission error) must surface verbatim rather than be masked.
+    if getattr(exc, "status", None) != 403:
+        return False
     haystack = "%s %s" % (
         getattr(exc, "message", "") or "",
         getattr(exc, "body", "") or "",

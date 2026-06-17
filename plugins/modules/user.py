@@ -11,7 +11,7 @@ DOCUMENTATION = r'''
 ---
 module: user
 short_description: Manage Pocket-ID users
-version_added: '1.0.0'
+version_added: '0.1.0'
 description:
   - Create, update, and delete users on a Pocket-ID instance.
   - Optionally manage a user's authoritative group membership and custom claims.
@@ -76,7 +76,8 @@ options:
       - Authoritative mapping of custom claim keys to string values for the user.
       - When omitted or V(null), custom claims are left untouched (no API call).
       - An empty mapping V({}) clears all custom claims.
-      - The reserved keys V(email), V(groups), and V(sub) are rejected.
+      - Reserved OIDC claim keys (for example V(email), V(groups), V(sub),
+        V(preferred_username), V(name)) are rejected.
     type: dict
   manage_ldap_synced:
     description:
@@ -162,11 +163,14 @@ from ansible_collections.trozz.pocketid.plugins.module_utils.pocketid import (
     pocketid_argument_spec,
 )
 from ansible_collections.trozz.pocketid.plugins.module_utils.pocketid_utils import (
+    claims_dict_to_list,
+    claims_list_to_dict,
     compute_diff,
     find_one_by_key,
     ldap_guard,
     resolve_group_refs,
     set_equal,
+    validate_custom_claims,
 )
 
 
@@ -186,8 +190,6 @@ USER_FIELD_MAP = {
 # API fields diffed for idempotency (the writable allowlist).
 USER_ALLOWLIST = list(USER_FIELD_MAP.values())
 
-RESERVED_CLAIM_KEYS = frozenset(("email", "groups", "sub"))
-
 
 def _desired_user_body(params):
     """Build the API user body from supplied (non-None) module params."""
@@ -202,33 +204,6 @@ def _desired_user_body(params):
 def _current_group_ids(user):
     """Return the set of group IDs the user currently belongs to."""
     return [g.get("id") for g in (user.get("userGroups") or []) if g.get("id")]
-
-
-def _claims_list_to_dict(claims):
-    """Convert the API ``[{key, value}]`` claim list to a dict."""
-    out = {}
-    for claim in claims or []:
-        key = claim.get("key")
-        if key is not None:
-            out[key] = claim.get("value")
-    return out
-
-
-def _claims_dict_to_list(claims):
-    """Convert a module claim dict to the API ``[{key, value}]`` list."""
-    return [{"key": k, "value": v} for k, v in (claims or {}).items()]
-
-
-def _validate_custom_claims(claims):
-    """Reject reserved custom-claim keys before any write."""
-    if not claims:
-        return
-    bad = sorted(set(claims) & RESERVED_CLAIM_KEYS)
-    if bad:
-        raise ValueError(
-            "custom_claims may not contain reserved key(s): %s"
-            % ", ".join(bad)
-        )
 
 
 def _get_full_user(client, user_id):
@@ -272,7 +247,7 @@ def run(params, client):
     manage_ldap = params.get("manage_ldap_synced")
 
     custom_claims = params.get("custom_claims")
-    _validate_custom_claims(custom_claims)
+    validate_custom_claims(custom_claims)
 
     current = _find_user(client, params)
 
@@ -379,7 +354,7 @@ def _reconcile_claims(params, client, current, user, user_id, check_mode):
         return False, None, None
 
     current_claims = (
-        _claims_list_to_dict(current.get("customClaims")) if current is not None else {}
+        claims_list_to_dict(current.get("customClaims")) if current is not None else {}
     )
 
     if current_claims == desired_claims:
@@ -387,7 +362,7 @@ def _reconcile_claims(params, client, current, user, user_id, check_mode):
         return False, None, None
 
     if not check_mode:
-        client.set_user_custom_claims(user_id, _claims_dict_to_list(desired_claims))
+        client.set_user_custom_claims(user_id, claims_dict_to_list(desired_claims))
     user["customClaims"] = dict(desired_claims)
     return True, dict(current_claims), dict(desired_claims)
 

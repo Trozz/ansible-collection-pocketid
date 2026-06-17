@@ -11,7 +11,7 @@ DOCUMENTATION = r'''
 ---
 module: scim_service_provider
 short_description: Manage a SCIM service provider for a Pocket-ID OIDC client
-version_added: '1.0.0'
+version_added: '0.1.0'
 description:
   - Create, update, or delete the SCIM service provider configuration attached to
     an OIDC client in Pocket-ID.
@@ -214,6 +214,11 @@ def _run_present(client, params, existing, oidc_client_id, check_mode):
     body = {"endpoint": endpoint, "oidcClientId": oidc_client_id}
     if token is not None:
         body["token"] = token
+    elif existing and existing.get("token"):
+        # The backend overwrites the stored token with input.Token on every
+        # update; carry the current (decrypted) token forward when the user did
+        # not supply one so an endpoint-only update does not wipe it.
+        body["token"] = existing.get("token")
 
     if existing:
         result = client.update_scim_service_provider(existing["id"], body)

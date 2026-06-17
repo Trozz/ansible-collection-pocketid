@@ -11,7 +11,7 @@ DOCUMENTATION = r'''
 ---
 module: one_time_access_token
 short_description: Mint a one-time access token for a Pocket-ID user
-version_added: '1.0.0'
+version_added: '0.1.0'
 description:
   - Mints a one-time access token for a Pocket-ID user. These tokens let a user
     authenticate once when they do not have access to their passkey.
@@ -58,6 +58,7 @@ EXAMPLES = r'''
     user_id: 7c2a1f3e-0000-4000-8000-000000000001
     ttl: 15m
   register: otat
+  no_log: true  # keep the returned token/access_link out of logs
 
 - name: Use the access link
   ansible.builtin.debug:
@@ -85,7 +86,8 @@ user_id:
 token:
   description:
     - The one-time access token value. Returned only on a real run.
-    - Treated as a secret (C(no_log)); not returned in check mode.
+    - Sensitive. Use the C(no_log) task keyword to keep it out of console and
+      log output while still registering it. Not returned in check mode.
   type: str
   returned: success and not check mode
   sample: a1b2c3d4e5f6
@@ -260,6 +262,10 @@ def main():
     except PocketIDError as exc:
         module.fail_json(msg=str(exc), status=getattr(exc, "status", None))
 
+    # The token (and the access link that embeds it) are the module's primary
+    # output and must remain retrievable from the registered result, so they are
+    # NOT added to no_log_values. Callers should set no_log: true on the task to
+    # keep them out of console/log output; see EXAMPLES.
     module.exit_json(**result)
 
 

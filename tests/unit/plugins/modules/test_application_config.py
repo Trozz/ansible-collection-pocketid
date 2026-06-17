@@ -164,11 +164,27 @@ def test_supplied_secret_overrides_carried_forward_sentinel():
 
 
 def test_ui_config_disabled_surfaced_clearly():
-    err = PocketIDError("HTTP 403: forbidden", status=403, body=None)
+    # Only a 403 whose body identifies the UI-config lock is rewritten.
+    err = PocketIDError(
+        "HTTP 403: forbidden",
+        status=403,
+        body="The configuration can't be changed since the UI configuration is disabled",
+    )
     client = FakeClient(_slice(**BASE), put_error=err)
     with pytest.raises(PocketIDError) as exc:
         run(_params(app_name="New Name"), client)
     assert "UI_CONFIG_DISABLED" in str(exc.value)
+
+
+def test_other_403_surfaced_verbatim():
+    # A 403 without the UI-config marker (e.g. a permission error) must not be
+    # masked as "UI configuration disabled".
+    err = PocketIDError("HTTP 403: insufficient permissions", status=403, body=None)
+    client = FakeClient(_slice(**BASE), put_error=err)
+    with pytest.raises(PocketIDError) as exc:
+        run(_params(app_name="New Name"), client)
+    assert "UI_CONFIG_DISABLED" not in str(exc.value)
+    assert "insufficient permissions" in str(exc.value)
 
 
 def test_invalid_json_option_rejected():

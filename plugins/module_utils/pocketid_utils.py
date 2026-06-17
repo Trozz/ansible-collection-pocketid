@@ -188,3 +188,62 @@ def ldap_guard(obj, manage_ldap_synced):
         "object is LDAP-synced (ldapId=%r); refusing to manage it. "
         "Set manage_ldap_synced: true to override." % (obj.get("ldapId"),)
     )
+
+
+# Authoritative reserved custom-claim keys, mirroring the Pocket-ID backend's
+# isReservedClaim (internal/service/custom_claim_service.go). These are rejected
+# client-side before any write so users get a clear error instead of an HTTP 400.
+RESERVED_CLAIM_KEYS = frozenset((
+    "given_name",
+    "family_name",
+    "name",
+    "email",
+    "email_verified",
+    "preferred_username",
+    "display_name",
+    "groups",
+    "type",
+    "sub",
+    "iss",
+    "aud",
+    "exp",
+    "iat",
+    "auth_time",
+    "nonce",
+    "acr",
+    "amr",
+    "azp",
+    "nbf",
+    "jti",
+))
+
+
+def claims_list_to_dict(claims):
+    """Convert an API custom-claims list of ``{key, value}`` into a flat dict."""
+    out = {}
+    for claim in claims or []:
+        key = claim.get("key")
+        if key is not None:
+            out[key] = claim.get("value")
+    return out
+
+
+def claims_dict_to_list(claims):
+    """Convert a flat custom-claims dict into the API list of ``{key, value}``."""
+    return [{"key": key, "value": value} for key, value in (claims or {}).items()]
+
+
+def validate_custom_claims(claims):
+    """Reject reserved custom-claim keys before any write.
+
+    Raises ValueError naming the offending key(s). A falsy/empty value is a
+    no-op (clearing claims is allowed).
+    """
+    if not claims:
+        return
+    bad = sorted(set(claims) & RESERVED_CLAIM_KEYS)
+    if bad:
+        raise ValueError(
+            "custom_claims contains reserved claim name(s): %s"
+            % ", ".join(repr(k) for k in bad)
+        )

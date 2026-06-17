@@ -11,7 +11,7 @@ DOCUMENTATION = r'''
 ---
 module: group
 short_description: Manage Pocket-ID user groups
-version_added: '1.0.0'
+version_added: '0.1.0'
 description:
   - Create, update, and delete user groups on a Pocket-ID instance.
   - >-
@@ -158,54 +158,17 @@ from ansible_collections.trozz.pocketid.plugins.module_utils.pocketid import (
     pocketid_argument_spec,
 )
 from ansible_collections.trozz.pocketid.plugins.module_utils.pocketid_utils import (
+    claims_dict_to_list,
+    claims_list_to_dict,
     compute_diff,
     find_one_by_key,
     ldap_guard,
+    validate_custom_claims,
 )
 
 
 # Writable, round-trippable fields used for diffing (scalar group attributes).
 WRITABLE_FIELDS = ("name", "friendlyName")
-
-# Claim keys rejected client-side before any write (mirrors the Pocket-ID backend).
-RESERVED_CLAIM_KEYS = frozenset((
-    "given_name",
-    "family_name",
-    "name",
-    "email",
-    "email_verified",
-    "preferred_username",
-    "display_name",
-    "groups",
-    "type",
-    "sub",
-    "iss",
-    "aud",
-    "exp",
-    "iat",
-    "auth_time",
-    "nonce",
-    "acr",
-    "amr",
-    "azp",
-    "nbf",
-    "jti",
-))
-
-
-def _claims_list_to_dict(claims):
-    """Convert an API custom-claims list of {key, value} into a flat dict."""
-    out = {}
-    for claim in claims or []:
-        key = claim.get("key")
-        if key is not None:
-            out[key] = claim.get("value")
-    return out
-
-
-def _claims_dict_to_list(claims):
-    """Convert a flat custom-claims dict into the API list of {key, value}."""
-    return [{"key": key, "value": value} for key, value in (claims or {}).items()]
 
 
 def _present_group(client, group):
@@ -215,7 +178,7 @@ def _present_group(client, group):
         "id": group.get("id"),
         "name": group.get("name"),
         "friendly_name": group.get("friendlyName"),
-        "custom_claims": _claims_list_to_dict(group.get("customClaims")),
+        "custom_claims": claims_list_to_dict(group.get("customClaims")),
         "members": members,
         "user_count": group.get("userCount", len(members)),
     }
@@ -243,18 +206,6 @@ def _resolve_group(client, params):
     return client.get_group(match["id"])
 
 
-def _validate_custom_claims(custom_claims):
-    """Reject reserved claim keys client-side before any write."""
-    if not custom_claims:
-        return
-    reserved = sorted(k for k in custom_claims if k in RESERVED_CLAIM_KEYS)
-    if reserved:
-        raise ValueError(
-            "custom_claims contains reserved claim name(s): %s"
-            % ", ".join(repr(k) for k in reserved)
-        )
-
-
 def run(params, client):
     """Pure core logic. Returns dict(changed, group, diff); raises on failure."""
     state = params.get("state")
@@ -262,7 +213,7 @@ def run(params, client):
     manage_ldap_synced = params.get("manage_ldap_synced")
     check_mode = params.get("_check_mode", False)
 
-    _validate_custom_claims(custom_claims)
+    validate_custom_claims(custom_claims)
 
     existing = _resolve_group(client, params)
 
@@ -312,7 +263,7 @@ def _create(client, params, desired, custom_claims, check_mode):
             "id": None,
             "name": body["name"],
             "friendlyName": body["friendlyName"],
-            "customClaims": _claims_dict_to_list(claims_after),
+            "customClaims": claims_dict_to_list(claims_after),
             "users": [],
             "userCount": 0,
         }
@@ -323,7 +274,7 @@ def _create(client, params, desired, custom_claims, check_mode):
 
     created = client.create_group(body)
     if custom_claims is not None:
-        client.set_group_custom_claims(created["id"], _claims_dict_to_list(custom_claims))
+        client.set_group_custom_claims(created["id"], claims_dict_to_list(custom_claims))
         created = client.get_group(created["id"])
 
     diff = {"before": {}, "after": after}
@@ -336,7 +287,7 @@ def _update(client, existing, desired, custom_claims, check_mode):
     """Update scalar fields and/or custom claims of an existing group."""
     scalar_changed, before, after = compute_diff(existing, desired, WRITABLE_FIELDS)
 
-    current_claims = _claims_list_to_dict(existing.get("customClaims"))
+    current_claims = claims_list_to_dict(existing.get("customClaims"))
     claims_changed = False
     if custom_claims is not None and custom_claims != current_claims:
         claims_changed = True
@@ -354,7 +305,7 @@ def _update(client, existing, desired, custom_claims, check_mode):
         if scalar_changed:
             merged.update({k: desired[k] for k in desired})
         if claims_changed:
-            merged["customClaims"] = _claims_dict_to_list(custom_claims)
+            merged["customClaims"] = claims_dict_to_list(custom_claims)
         return {"changed": True, "group": _present_group(client, merged), "diff": diff}
 
     result = existing
@@ -366,7 +317,7 @@ def _update(client, existing, desired, custom_claims, check_mode):
         result = client.update_group(existing["id"], body)
 
     if claims_changed:
-        client.set_group_custom_claims(existing["id"], _claims_dict_to_list(custom_claims))
+        client.set_group_custom_claims(existing["id"], claims_dict_to_list(custom_claims))
         result = client.get_group(existing["id"])
 
     return {"changed": True, "group": _present_group(client, result), "diff": diff}

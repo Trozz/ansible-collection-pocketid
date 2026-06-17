@@ -11,7 +11,7 @@ DOCUMENTATION = r'''
 ---
 module: client_secret
 short_description: Rotate an OIDC client's secret in Pocket-ID
-version_added: '1.0.0'
+version_added: '0.1.0'
 description:
   - Rotates (regenerates) the secret of an OIDC client managed by Pocket-ID.
   - This is an imperative action module with no state. On a real run it always
@@ -19,9 +19,10 @@ description:
     rotation request is not idempotent.
   - Rotating the secret B(invalidates the previous secret immediately). Any
     integration still using the old secret will stop working until it is updated.
-  - The new secret is returned B(only once) in the module result (as a
-    C(no_log) value) and cannot be retrieved again later. Capture and store it
-    immediately.
+  - The new secret is returned B(only once) in the module result and cannot be
+    retrieved again later. Capture and store it immediately. Use the C(no_log)
+    task keyword to keep the secret out of console and log output while still
+    registering it.
   - In check mode the secret is never rotated; the module reports C(changed=true)
     without contacting the rotation endpoint and without returning a secret.
 author:
@@ -156,6 +157,10 @@ def main():
     except ValueError as exc:
         module.fail_json(msg=str(exc))
 
+    # The secret is the module's primary output and must remain retrievable from
+    # the registered result, so it is NOT added to no_log_values (that would mask
+    # it in the registered variable too). Callers should set no_log: true on the
+    # task to keep it out of console/log output; see EXAMPLES.
     module.exit_json(**result)
 
 

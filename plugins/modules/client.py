@@ -10,7 +10,7 @@ __metaclass__ = type
 DOCUMENTATION = r"""
 module: client
 short_description: Manage OIDC clients in Pocket-ID
-version_added: '1.0.0'
+version_added: '0.1.0'
 description:
   - Create, update, and delete OIDC clients in a Pocket-ID instance.
   - >-
@@ -30,8 +30,9 @@ options:
   name:
     description:
       - Display name of the OIDC client.
+      - Required when O(state=present). When O(state=absent) a client may be
+        located by O(id) alone.
     type: str
-    required: true
   callback_urls:
     description:
       - List of allowed callback (redirect) URLs for the OIDC client.
@@ -123,6 +124,7 @@ EXAMPLES = r"""
       - https://grafana.example.com/login/generic_oauth
     is_public: false
   register: grafana_client
+  no_log: true  # keep the returned client_secret out of logs
 
 - name: Persist the one-time client secret
   ansible.builtin.copy:
@@ -238,6 +240,29 @@ def _normalize_credentials(creds):
             if value:
                 item[key] = value
         out.append(item)
+    return out
+
+
+def _canonicalize(fields):
+    """Return a copy of an API-field dict in a canonical, comparable form.
+
+    Callback-URL allow-lists are semantically unordered, so they are sorted; the
+    nested ``credentials`` object is projected to the same round-trippable shape
+    as the desired state (issuer + truthy optionals only). Applying this to both
+    current and desired before diffing prevents false ``changed`` from URL
+    reordering or server-populated credential subkeys.
+    """
+    out = dict(fields)
+    for key in ("callbackURLs", "logoutCallbackURLs"):
+        if isinstance(out.get(key), list):
+            out[key] = sorted(out[key])
+    creds = out.get("credentials")
+    if isinstance(creds, dict):
+        out["credentials"] = {
+            "federatedIdentities": _normalize_credentials(
+                creds.get("federatedIdentities")
+            )
+        }
     return out
 
 
@@ -408,7 +433,9 @@ def _create(params, client, desired, diff_fields, manage_groups, desired_group_i
 
 def _update(params, client, current, desired, diff_fields, manage_groups,
             desired_group_ids, check_mode):
-    fields_changed, before, after = compute_diff(current, desired, diff_fields)
+    fields_changed, before, after = compute_diff(
+        _canonicalize(current), _canonicalize(desired), diff_fields
+    )
 
     groups_changed = False
     if manage_groups:
@@ -429,9 +456,9 @@ def _update(params, client, current, desired, diff_fields, manage_groups,
 
     client_id = current["id"]
     if fields_changed:
-        body = dict(desired)
-        # Preserve current PAR when the server has it but the user did not set it.
-        client.update_client(client_id, body)
+        # desired already carries current PAR forward (see _build_desired) when
+        # the server has the field but the user did not set it.
+        client.update_client(client_id, dict(desired))
 
     if groups_changed:
         client.set_client_allowed_groups(client_id, desired_group_ids)
@@ -444,7 +471,7 @@ def main():
     argument_spec = {
         **pocketid_argument_spec(),
         "id": {"type": "str"},
-        "name": {"type": "str", "required": True},
+        "name": {"type": "str"},
         "callback_urls": {"type": "list", "elements": "str"},
         "logout_callback_urls": {"type": "list", "elements": "str"},
         "is_public": {"type": "bool"},
@@ -474,6 +501,9 @@ def main():
     module = AnsibleModule(
         argument_spec=argument_spec,
         supports_check_mode=True,
+        # name is the natural key only when creating/updating; an id anchor is
+        # enough to locate a client for deletion or id-based management.
+        required_if=[("state", "present", ("name",))],
     )
 
     client = PocketIDClient.from_module(module)
@@ -486,6 +516,9 @@ def main():
     except (PocketIDError, ValueError) as exc:
         module.fail_json(msg=str(exc), status=getattr(exc, "status", None))
 
+    # client_secret is returned (only on creation) so the caller can persist it;
+    # it is deliberately NOT added to no_log_values, which would also mask it in
+    # the registered result. Set no_log: true on the task to keep it out of logs.
     module.exit_json(**result)
 
 

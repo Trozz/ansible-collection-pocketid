@@ -114,8 +114,9 @@ def test_update_endpoint_change():
     update_calls = [c for c in client.calls if c[0] == "update"]
     assert len(update_calls) == 1
     assert update_calls[0][2]["endpoint"] == "https://new.example.com/v2"
-    # token omitted from body since not supplied
-    assert "token" not in update_calls[0][2]
+    # The stored token is carried forward when not supplied, because the backend
+    # overwrites Token on every update; omitting it would wipe the stored value.
+    assert update_calls[0][2]["token"] == "stored-token"
 
 
 def test_noop_idempotency():

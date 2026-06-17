@@ -39,7 +39,7 @@ options:
   timeout:
     description:
       - Per-attempt HTTP timeout in seconds. With retries, the worst-case wall
-        time is roughly C((retries + 1) * timeout) plus backoff.
+        time is roughly (retries + 1) * timeout plus backoff.
       - If not set, the value of the E(POCKETID_TIMEOUT) environment variable is
         used.
     type: int

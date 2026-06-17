@@ -21,6 +21,7 @@ issues: https://github.com/trozz/ansible-collection-pocketid/issues
 homepage: https://github.com/trozz/ansible-collection-pocketid
 build_ignore:
   - docs
+  - examples
   - tests/output
   - tests/integration/test-data
   - tests/integration/integration_config.yml

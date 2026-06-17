@@ -1,0 +1,134 @@
+---
+# Exercises: trozz.pocketid.client, trozz.pocketid.client_info, and the
+# trozz.pocketid.client lookup, across every option (including the credentials
+# suboptions and group restriction).
+- name: Manage Pocket-ID OIDC clients
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  module_defaults:
+    group/trozz.pocketid.pocketid:
+      base_url: "{{ lookup('env', 'POCKETID_BASE_URL') }}"
+      api_token: "{{ lookup('env', 'POCKETID_API_TOKEN') }}"
+      validate_certs: false
+      timeout: 30
+  tasks:
+    - name: Exercise the client modules and lookup
+      block:
+        - name: Create a group to restrict the client to
+          trozz.pocketid.group:
+            name: example-client-users
+            state: present
+
+        - name: Create an OIDC client with every available option
+          trozz.pocketid.client:
+            name: Example Client
+            callback_urls:
+              - https://app.example.com/callback
+              - https://app.example.com/callback2
+            logout_callback_urls:
+              - https://app.example.com/logout
+            is_public: false
+            pkce_enabled: true
+            requires_reauthentication: false
+            requires_pushed_authorization_requests: false
+            launch_url: https://app.example.com
+            is_group_restricted: true
+            allowed_user_groups:
+              - example-client-users
+            credentials:
+              - issuer: https://issuer.example.com
+                subject: example-subject
+                audience: example-audience
+                jwks: '{"keys": []}'
+            state: present
+          register: created
+
+        - name: Re-run the create unchanged to prove idempotence
+          trozz.pocketid.client:
+            name: Example Client
+            callback_urls:
+              - https://app.example.com/callback
+              - https://app.example.com/callback2
+            logout_callback_urls:
+              - https://app.example.com/logout
+            is_public: false
+            pkce_enabled: true
+            requires_reauthentication: false
+            requires_pushed_authorization_requests: false
+            launch_url: https://app.example.com
+            is_group_restricted: true
+            allowed_user_groups:
+              - example-client-users
+            credentials:
+              - issuer: https://issuer.example.com
+                subject: example-subject
+                audience: example-audience
+                jwks: '{"keys": []}'
+            state: present
+          register: rerun
+
+        - name: Assert the client was created once, returned a secret, and is idempotent
+          ansible.builtin.assert:
+            that:
+              - created is changed
+              - created.client.id is defined
+              - created.client_secret is defined
+              - rerun is not changed
+
+        - name: Update the client in place using its immutable id
+          trozz.pocketid.client:
+            id: "{{ created.client.id }}"
+            name: Example Client Renamed
+            state: present
+          register: renamed
+
+        - name: Assert the update kept the id
+          ansible.builtin.assert:
+            that:
+              - renamed is changed
+              - renamed.client.id == created.client.id
+
+        - name: Look up the client by id
+          trozz.pocketid.client_info:
+            id: "{{ created.client.id }}"
+          register: by_id
+
+        - name: Look up the client by name
+          trozz.pocketid.client_info:
+            name: Example Client Renamed
+          register: by_name
+
+        - name: List all clients
+          trozz.pocketid.client_info: {}
+          register: all_clients
+
+        - name: Assert the info lookups resolved the client (secret redacted)
+          ansible.builtin.assert:
+            that:
+              - by_id.client.id == created.client.id
+              - by_name.client.id == created.client.id
+              - all_clients.clients | length >= 1
+
+        - name: Resolve clients with the client lookup plugin by id (reads POCKETID_* env)
+          ansible.builtin.set_fact:
+            looked_up: "{{ query('trozz.pocketid.client', created.client.id) }}"
+
+        - name: Assert the lookup resolved the same client
+          ansible.builtin.assert:
+            that:
+              - looked_up | length == 1
+              - looked_up[0].id == created.client.id
+
+      always:
+        - name: Remove the client
+          trozz.pocketid.client:
+            id: "{{ created.client.id | default('') }}"
+            name: Example Client Renamed
+            state: absent
+          when: created.client.id is defined
+
+        - name: Remove the restriction group
+          trozz.pocketid.group:
+            name: example-client-users
+            state: absent

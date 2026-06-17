@@ -1,0 +1,108 @@
+---
+# Exercises: trozz.pocketid.group_membership in both supported forms
+# (user-centric and group-centric), including empty-list clearing.
+- name: Manage Pocket-ID group membership
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  module_defaults:
+    group/trozz.pocketid.pocketid:
+      base_url: "{{ lookup('env', 'POCKETID_BASE_URL') }}"
+      api_token: "{{ lookup('env', 'POCKETID_API_TOKEN') }}"
+      validate_certs: false
+      timeout: 30
+  tasks:
+    - name: Exercise group membership
+      block:
+        - name: Create the groups
+          trozz.pocketid.group:
+            name: "{{ item }}"
+            state: present
+          loop:
+            - example-admins
+            - example-developers
+
+        - name: Create the users
+          # Pocket-ID requires every user to have an email address.
+          trozz.pocketid.user:
+            username: "{{ item.username }}"
+            email: "{{ item.email }}"
+            state: present
+          loop:
+            - { username: example.alice, email: example.alice@example.com }
+            - { username: example.bob, email: example.bob@example.com }
+
+        # User form: authoritatively set the complete set of groups for one user.
+        - name: Set the complete group set for a user (user form)
+          trozz.pocketid.group_membership:
+            user: example.alice
+            groups:
+              - example-admins
+              - example-developers
+            manage_ldap_synced: false
+          register: user_form
+
+        - name: Re-run the user form unchanged to prove idempotence
+          trozz.pocketid.group_membership:
+            user: example.alice
+            groups:
+              - example-admins
+              - example-developers
+          register: user_form_rerun
+
+        - name: Assert the user form converged and is idempotent
+          ansible.builtin.assert:
+            that:
+              - user_form is changed
+              - user_form_rerun is not changed
+
+        # Group form: authoritatively set the complete set of users in one group,
+        # preserving each user's membership in other groups.
+        - name: Set the complete user set for a group (group form)
+          trozz.pocketid.group_membership:
+            group: example-developers
+            users:
+              - example.alice
+              - example.bob
+            manage_ldap_synced: false
+          register: group_form
+
+        - name: Assert the group form converged
+          ansible.builtin.assert:
+            that:
+              - group_form is changed
+
+        - name: Remove the user from all groups with an empty list (user form)
+          trozz.pocketid.group_membership:
+            user: example.alice
+            groups: []
+          register: user_cleared
+
+        - name: Remove all users from the group with an empty list (group form)
+          trozz.pocketid.group_membership:
+            group: example-developers
+            users: []
+          register: group_cleared
+
+        - name: Assert the empty-list clears were changes
+          ansible.builtin.assert:
+            that:
+              - user_cleared is changed
+              - group_cleared is changed
+
+      always:
+        - name: Clean up the users
+          trozz.pocketid.user:
+            username: "{{ item }}"
+            state: absent
+          loop:
+            - example.alice
+            - example.bob
+
+        - name: Clean up the groups
+          trozz.pocketid.group:
+            name: "{{ item }}"
+            state: absent
+          loop:
+            - example-admins
+            - example-developers

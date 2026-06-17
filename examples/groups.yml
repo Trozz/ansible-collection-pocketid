@@ -1,0 +1,107 @@
+---
+# Exercises: trozz.pocketid.group, trozz.pocketid.group_info, and the
+# trozz.pocketid.group lookup, across every option.
+- name: Manage Pocket-ID groups
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  module_defaults:
+    group/trozz.pocketid.pocketid:
+      base_url: "{{ lookup('env', 'POCKETID_BASE_URL') }}"
+      api_token: "{{ lookup('env', 'POCKETID_API_TOKEN') }}"
+      validate_certs: false
+      timeout: 30
+  tasks:
+    - name: Exercise the group modules and lookup
+      block:
+        - name: Create a group with every available option
+          trozz.pocketid.group:
+            name: example-group
+            friendly_name: Example Group
+            custom_claims:
+              department: platform
+              cost_center: "4200"
+            manage_ldap_synced: false
+            state: present
+          register: created
+
+        - name: Re-run the create unchanged to prove idempotence
+          trozz.pocketid.group:
+            name: example-group
+            friendly_name: Example Group
+            custom_claims:
+              department: platform
+              cost_center: "4200"
+            state: present
+          register: rerun
+
+        - name: Assert the group was created once and is now idempotent
+          ansible.builtin.assert:
+            that:
+              - created is changed
+              - created.group.id is defined
+              - rerun is not changed
+
+        - name: Rename the group in place using its immutable id
+          trozz.pocketid.group:
+            id: "{{ created.group.id }}"
+            name: example-group-renamed
+            friendly_name: Example Group Renamed
+            state: present
+          register: renamed
+
+        - name: Assert the rename kept the id
+          ansible.builtin.assert:
+            that:
+              - renamed is changed
+              - renamed.group.id == created.group.id
+
+        - name: Look up the group by id
+          trozz.pocketid.group_info:
+            id: "{{ created.group.id }}"
+          register: by_id
+
+        - name: Look up the group by name
+          trozz.pocketid.group_info:
+            name: example-group-renamed
+          register: by_name
+
+        - name: List all groups
+          trozz.pocketid.group_info: {}
+          register: all_groups
+
+        - name: Assert the info lookups resolved the group
+          ansible.builtin.assert:
+            that:
+              - by_id.group.id == created.group.id
+              - by_name.group.id == created.group.id
+              - all_groups.groups | length >= 1
+
+        - name: Resolve the group with the group lookup plugin (reads POCKETID_* env)
+          ansible.builtin.set_fact:
+            looked_up: "{{ query('trozz.pocketid.group', 'example-group-renamed') }}"
+
+        - name: Assert the lookup resolved the same group
+          ansible.builtin.assert:
+            that:
+              - looked_up | length == 1
+              - looked_up[0].id == created.group.id
+
+        - name: Clear the group's custom claims authoritatively
+          trozz.pocketid.group:
+            id: "{{ created.group.id }}"
+            name: example-group-renamed
+            custom_claims: {}
+            state: present
+          register: cleared
+
+        - name: Assert clearing the custom claims was a change
+          ansible.builtin.assert:
+            that:
+              - cleared is changed
+
+      always:
+        - name: Remove the group
+          trozz.pocketid.group:
+            name: example-group-renamed
+            state: absent

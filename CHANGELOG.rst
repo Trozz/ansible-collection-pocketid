@@ -8,6 +8,18 @@ This changelog is managed by `antsibull-changelog
 <https://github.com/ansible-community/antsibull-changelog>`_. Add change
 fragments under ``changelogs/fragments/`` rather than editing this file by hand.
 
+v1.0.2
+======
+
+Bugfixes
+--------
+
+- Replace the ``M()`` module-reference markup in the ``group`` and
+  ``group_membership`` documentation with plain ``C()`` code markup. The
+  Ansible Galaxy UI threw while resolving the cross-plugin links, which made
+  those two plugin pages fail to render with "cannot parse plugin
+  documentation".
+
 v1.0.1
 ======
 

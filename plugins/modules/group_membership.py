@@ -71,7 +71,7 @@ notes:
   - >-
     Single-writer rule. The Pocket-ID membership API is per-user. The group form
     therefore writes the whole group list of each affected user. The
-    M(trozz.pocketid.user) module's O(groups) option and this module must not
+    C(trozz.pocketid.user) module's O(groups) option and this module must not
     co-manage the same user, the per-user whole-list PUT is last-write-wins.
   - >-
     Sequence playbooks as groups, then users, then memberships so that all

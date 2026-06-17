@@ -249,11 +249,15 @@ These have their own data flow: validate → (check_mode) predict without callin
 the API → POST and return. Always `changed=true`. No natural-key dedup/caching.
 
 - **`one_time_access_token`** — mints a one-time access token for a user. `ttl`
-  bounds validated in argspec before the POST. Returns the token (`no_log`).
-  Never auto-retried.
+  bounds validated in argspec before the POST. Returns the token. Never
+  auto-retried. The token is the module's primary output, so it is returned in
+  the result for the caller to capture; it is **not** added to `no_log_values`
+  (that would also mask it in the registered variable). Callers set `no_log:
+  true` on the task to keep it out of logs.
 - **`client_secret`** — rotates an OIDC client's secret. Returns the new secret
-  (`no_log`) once. check_mode never rotates (rotation invalidates the live
-  secret). Never auto-retried.
+  once (same return-secret handling as above: usable in the registered result,
+  protected with task-level `no_log`). check_mode never rotates (rotation
+  invalidates the live secret). Never auto-retried.
 
 ### Info modules (read-only; mirror the TF data sources)
 

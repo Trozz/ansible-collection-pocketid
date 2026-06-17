@@ -127,10 +127,7 @@ jobs:
       - name: Install ansible-core
         run: python -m pip install "https://github.com/ansible/ansible/archive/stable-2.18.tar.gz" --disable-pip-version-check
 
-      - name: Install sqlite3
-        run: sudo apt-get update && sudo apt-get install -y sqlite3
-
-      - name: Bootstrap Pocket-ID (start, seed, smoke check)
+      - name: Bootstrap Pocket-ID (start + auth smoke check)
         working-directory: ${{ env.COLLECTION_PATH }}
         env:
           POCKET_ID_IMAGE: ${{ matrix.pocket_id.image }}

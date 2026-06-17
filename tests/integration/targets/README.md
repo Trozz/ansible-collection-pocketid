@@ -8,12 +8,14 @@ From the collection root (a path ending in
 `ansible_collections/trozz/pocketid`):
 
 ```bash
-# 1. Bring up Pocket-ID, seed an admin + API key, run the auth smoke check,
-#    and render tests/integration/integration_config.yml.
+# 1. Bring up Pocket-ID (auth uses its built-in STATIC_API_KEY, which provisions
+#    an admin user on first use), run the auth smoke check, and render
+#    tests/integration/integration_config.yml.
 bash scripts/integration-bootstrap.sh
 
 # 2. Run the integration suite locally (host venv, connection: local).
-ansible-test integration --local -v
+#    Targets are marked "unsupported" (they need the live server).
+ansible-test integration --local -v --allow-unsupported
 
 # 3. Tear the test instance down when finished.
 bash scripts/integration-bootstrap.sh --down

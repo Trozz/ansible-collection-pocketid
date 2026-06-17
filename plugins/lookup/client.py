@@ -120,30 +120,25 @@ def run(terms, client):
     """Resolve each term to a redacted client object; list all when no terms.
 
     A term equal to a known client id is resolved by id; otherwise it is treated
-    as a natural-key name. A name matching no client raises ValueError; a name
-    matching more than one client raises ValueError (disambiguation). Returns a
-    list of redacted client dicts. Raises ValueError/PocketIDError on failure.
+    as a natural-key name and matched against the client list. A name matching no
+    client raises ValueError; a name matching more than one client raises
+    ValueError (disambiguation). Resolving names from the listing avoids placing
+    an arbitrary name into a request path. Returns a list of redacted client
+    dicts. Raises ValueError/PocketIDError on failure.
     """
+    clients = client.list_clients() or []
     if not terms:
-        clients = client.list_clients() or []
         return [_scrub(c) for c in clients]
 
+    by_id = {c.get("id"): c for c in clients if c.get("id") is not None}
+
     results = []
-    cached_clients = None
     for term in terms:
-        try:
-            match = client.get_client(term)
-        except PocketIDError as exc:
-            if getattr(exc, "status", None) != 404:
-                raise
-            match = None
-        if match is not None:
-            results.append(_scrub(match))
+        if term in by_id:
+            results.append(_scrub(by_id[term]))
             continue
 
-        if cached_clients is None:
-            cached_clients = client.list_clients() or []
-        by_name = find_one_by_key(cached_clients, "name", term)
+        by_name = find_one_by_key(clients, "name", term)
         if by_name is None:
             raise ValueError("no Pocket-ID client found for %r" % (term,))
         results.append(_scrub(by_name))

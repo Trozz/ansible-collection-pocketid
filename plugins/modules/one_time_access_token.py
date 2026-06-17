@@ -11,7 +11,7 @@ DOCUMENTATION = r'''
 ---
 module: one_time_access_token
 short_description: Mint a one-time access token for a Pocket-ID user
-version_added: '0.1.0'
+version_added: '1.0.0'
 description:
   - Mints a one-time access token for a Pocket-ID user. These tokens let a user
     authenticate once when they do not have access to their passkey.

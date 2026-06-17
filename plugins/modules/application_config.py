@@ -11,7 +11,7 @@ DOCUMENTATION = r'''
 ---
 module: application_config
 short_description: Manage the Pocket-ID application configuration singleton
-version_added: '0.1.0'
+version_added: '1.0.0'
 author:
   - trozz (@trozz)
 description:

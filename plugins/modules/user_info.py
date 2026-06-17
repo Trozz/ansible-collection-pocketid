@@ -11,7 +11,7 @@ DOCUMENTATION = r'''
 ---
 module: user_info
 short_description: Retrieve information about Pocket-ID users
-version_added: '0.1.0'
+version_added: '1.0.0'
 description:
   - Look up one or more users on a Pocket-ID instance.
   - Provide O(id), O(username), or O(email) to filter; with no filter every user

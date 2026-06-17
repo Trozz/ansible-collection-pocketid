@@ -11,7 +11,7 @@ DOCUMENTATION = r'''
 ---
 module: user
 short_description: Manage Pocket-ID users
-version_added: '0.1.0'
+version_added: '1.0.0'
 description:
   - Create, update, and delete users on a Pocket-ID instance.
   - Optionally manage a user's authoritative group membership and custom claims.

@@ -11,7 +11,7 @@ DOCUMENTATION = r'''
 ---
 module: client_secret
 short_description: Rotate an OIDC client's secret in Pocket-ID
-version_added: '0.1.0'
+version_added: '1.0.0'
 description:
   - Rotates (regenerates) the secret of an OIDC client managed by Pocket-ID.
   - This is an imperative action module with no state. On a real run it always

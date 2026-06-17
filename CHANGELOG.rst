@@ -8,6 +8,19 @@ This changelog is managed by `antsibull-changelog
 <https://github.com/ansible-community/antsibull-changelog>`_. Add change
 fragments under ``changelogs/fragments/`` rather than editing this file by hand.
 
+v1.0.3
+======
+
+Bugfixes
+--------
+
+- The ``trozz.pocketid.client`` lookup failed to resolve client names
+  containing spaces (or other URL-unsafe characters) because it placed the raw
+  name in the request path, raising ``URL can't contain control characters``
+  before it could fall back to a listing. It now resolves names from the client
+  listing like the ``group`` lookup does, never putting an arbitrary name into a
+  URL path.
+
 v1.0.2
 ======
 

@@ -71,16 +71,16 @@ def test_no_terms_lists_all_redacted():
 
 
 def test_lookup_by_id():
-    client = FakeClient(by_id={"id-a": CLIENT_A})
+    client = FakeClient(clients=[CLIENT_A, CLIENT_B])
 
     result = run(["id-a"], client)
 
     assert len(result) == 1
     assert result[0]["id"] == "id-a"
     assert result[0]["secret"] == REDACTED
-    assert client.get_calls == ["id-a"]
-    # An id hit must not trigger a list fetch.
-    assert client.list_calls == 0
+    # Ids are resolved from the listing; the raw term is never put in a URL.
+    assert client.get_calls == []
+    assert client.list_calls == 1
 
 
 def test_lookup_by_name_falls_back_to_list():
@@ -90,8 +90,23 @@ def test_lookup_by_name_falls_back_to_list():
 
     assert result[0]["id"] == "id-b"
     assert result[0]["clientSecret"] == REDACTED
-    # The name term first probes get_client, then resolves via the list.
-    assert client.get_calls == ["SPA"]
+    # Names are resolved via the list, never by passing the name to get_client.
+    assert client.get_calls == []
+    assert client.list_calls == 1
+
+
+def test_lookup_by_name_with_spaces_resolves():
+    spaced = {"id": "id-c", "name": "Demo Web App", "secret": "super-secret-c"}
+    client = FakeClient(clients=[CLIENT_A, spaced])
+
+    result = run(["Demo Web App"], client)
+
+    assert len(result) == 1
+    assert result[0]["id"] == "id-c"
+    assert result[0]["name"] == "Demo Web App"
+    assert result[0]["secret"] == REDACTED
+    # A space-containing name must never reach a URL path via get_client.
+    assert client.get_calls == []
     assert client.list_calls == 1
 
 
@@ -104,7 +119,7 @@ def test_multiple_terms_preserve_order_and_cache_list():
     result = run(["SPA", "id-a", "Grafana"], client)
 
     assert [c["id"] for c in result] == ["id-b", "id-a", "id-a"]
-    # Two name lookups but the client list is fetched exactly once (cached).
+    # Several lookups but the client list is fetched exactly once.
     assert client.list_calls == 1
 
 

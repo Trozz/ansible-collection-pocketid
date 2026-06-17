@@ -16,8 +16,8 @@ description:
   - Create, update, and delete user groups on a Pocket-ID instance.
   - >-
     This module is membership-write-free. It never modifies the members of a
-    group. Use the M(trozz.pocketid.group_membership) module (or the C(groups)
-    option of M(trozz.pocketid.user)) to manage membership. The current members
+    group. Use the C(trozz.pocketid.group_membership) module (or the C(groups)
+    option of C(trozz.pocketid.user)) to manage membership. The current members
     and member count are exposed read-only for auditing.
   - >-
     Groups owned by an external LDAP directory (those carrying an C(ldapId)) are

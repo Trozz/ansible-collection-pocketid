@@ -1,0 +1,46 @@
+---
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+# Publishing to Ansible Galaxy reads the version from galaxy.yml. The tag is
+# only the trigger, so we fail fast if the tag and galaxy.yml disagree to keep
+# git tags and the published artifact in lockstep.
+jobs:
+  publish:
+    name: Publish to Ansible Galaxy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the collection
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install ansible-core
+        run: python -m pip install ansible-core --disable-pip-version-check
+
+      - name: Verify tag matches galaxy.yml version
+        if: github.event_name == 'push'
+        run: |
+          galaxy_version="$(python -c 'import yaml; print(yaml.safe_load(open("galaxy.yml"))["version"])')"
+          tag_version="${GITHUB_REF_NAME#v}"
+          if [ "$galaxy_version" != "$tag_version" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match galaxy.yml version ${galaxy_version}"
+            exit 1
+          fi
+          echo "Releasing version ${galaxy_version}"
+
+      - name: Build the collection
+        run: ansible-galaxy collection build --output-path dist
+
+      - name: Publish the collection
+        env:
+          ANSIBLE_GALAXY_TOKEN: ${{ secrets.GALAXY_API_KEY }}
+        run: ansible-galaxy collection publish dist/trozz-pocketid-*.tar.gz --api-key "$ANSIBLE_GALAXY_TOKEN"

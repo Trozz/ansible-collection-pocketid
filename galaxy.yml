@@ -16,9 +16,9 @@ tags:
   - oidc
   - sso
   - security
-repository: https://github.com/trozz/ansible-module-pocketid
-issues: https://github.com/trozz/ansible-module-pocketid/issues
-homepage: https://github.com/trozz/ansible-module-pocketid
+repository: https://github.com/trozz/ansible-collection-pocketid
+issues: https://github.com/trozz/ansible-collection-pocketid/issues
+homepage: https://github.com/trozz/ansible-collection-pocketid
 build_ignore:
   - docs
   - tests/output

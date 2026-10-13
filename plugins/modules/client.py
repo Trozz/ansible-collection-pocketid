@@ -64,6 +64,15 @@ options:
         carries the field (Pocket-ID v2.9.0+) or when explicitly set here. Older
         servers that omit the field leave it untouched.
     type: bool
+  skip_consent:
+    description:
+      - Whether users skip the consent screen when they authorize this client.
+      - >-
+        Version-absent aware. It is only diffed and sent when the server object
+        carries the field or when explicitly set here. When unset, an update
+        keeps the current server value instead of resetting it to V(false).
+    type: bool
+    version_added: '1.1.0'
   launch_url:
     description:
       - Optional launch URL associated with the client.
@@ -195,8 +204,8 @@ from ansible_collections.trozz.pocketid.plugins.module_utils.pocketid_utils impo
 )
 
 
-# Writable, round-trippable fields used for the diff/payload. PAR is handled
-# separately because it is version-absent aware.
+# Writable, round-trippable fields used for the diff/payload. The fields in
+# VERSION_ABSENT_FIELDS are handled separately.
 WRITABLE_FIELDS = (
     "name",
     "callbackURLs",
@@ -210,6 +219,14 @@ WRITABLE_FIELDS = (
 )
 
 PAR_FIELD = "requiresPushedAuthorizationRequests"
+
+# Fields that older servers omit, keyed by Ansible option name. Each one is only
+# diffed and sent when the user set it or the server object carries it, and an
+# unset option carries the current value forward so the PUT does not reset it.
+VERSION_ABSENT_FIELDS = {
+    "requires_pushed_authorization_requests": PAR_FIELD,
+    "skip_consent": "skipConsent",
+}
 
 # Maps Ansible option names to their API field names for the client body.
 _OPTION_TO_FIELD = {
@@ -270,7 +287,7 @@ def _build_desired(params, current):
     """Build the normalized-desired API field dict from module params.
 
     ``current`` is the current client object (or None) used only to decide
-    whether the version-absent PAR field participates.
+    whether the version-absent fields participate.
     """
     desired = {}
 
@@ -300,15 +317,13 @@ def _build_desired(params, current):
     elif params.get("allowed_user_groups") is not None:
         desired["isGroupRestricted"] = bool(params["allowed_user_groups"])
 
-    # PAR is version-absent aware: only participate when the user set it or the
+    # Version-absent fields only participate when the user set them or the
     # current server object already carries the field.
-    user_set_par = params.get("requires_pushed_authorization_requests") is not None
-    server_has_par = bool(current) and PAR_FIELD in current
-    if user_set_par or server_has_par:
-        if user_set_par:
-            desired[PAR_FIELD] = params["requires_pushed_authorization_requests"]
-        else:
-            desired[PAR_FIELD] = current.get(PAR_FIELD)
+    for option, field in VERSION_ABSENT_FIELDS.items():
+        if params.get(option) is not None:
+            desired[field] = params[option]
+        elif current and field in current:
+            desired[field] = current[field]
 
     return desired
 
@@ -316,8 +331,7 @@ def _build_desired(params, current):
 def _diff_fields(desired):
     """Return the ordered list of diffable API fields for a desired dict."""
     fields = list(WRITABLE_FIELDS)
-    if PAR_FIELD in desired:
-        fields.append(PAR_FIELD)
+    fields.extend(f for f in VERSION_ABSENT_FIELDS.values() if f in desired)
     return fields
 
 
@@ -456,8 +470,8 @@ def _update(params, client, current, desired, diff_fields, manage_groups,
 
     client_id = current["id"]
     if fields_changed:
-        # desired already carries current PAR forward (see _build_desired) when
-        # the server has the field but the user did not set it.
+        # desired already carries current version-absent fields forward (see
+        # _build_desired) when the server has them but the user did not set them.
         client.update_client(client_id, dict(desired))
 
     if groups_changed:
@@ -478,6 +492,7 @@ def main():
         "pkce_enabled": {"type": "bool"},
         "requires_reauthentication": {"type": "bool"},
         "requires_pushed_authorization_requests": {"type": "bool"},
+        "skip_consent": {"type": "bool"},
         "launch_url": {"type": "str"},
         "is_group_restricted": {"type": "bool"},
         "allowed_user_groups": {"type": "list", "elements": "str"},

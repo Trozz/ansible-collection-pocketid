@@ -1,0 +1,5 @@
+---
+minor_changes:
+  - client - add the ``skip_consent`` option. It is version-absent aware like
+    ``requires_pushed_authorization_requests``. When unset, an update keeps the
+    current server value instead of resetting it to ``false``.

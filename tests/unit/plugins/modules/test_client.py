@@ -84,6 +84,7 @@ def base_params(**overrides):
         "pkce_enabled": None,
         "requires_reauthentication": None,
         "requires_pushed_authorization_requests": None,
+        "skip_consent": None,
         "launch_url": None,
         "is_group_restricted": None,
         "allowed_user_groups": None,
@@ -222,6 +223,52 @@ def test_par_user_set_triggers_change_on_absent_server_field():
     assert result["changed"] is True
     body = _called(client, "update_client")[0][2]
     assert body["requiresPushedAuthorizationRequests"] is True
+
+
+def test_skip_consent_user_set_triggers_change():
+    existing = {
+        "id": "c1",
+        "name": "App",
+        "callbackURLs": ["https://app.example.com/cb"],
+        "isPublic": True,
+        "skipConsent": False,
+    }
+    client = FakeClient(clients=[existing])
+    result = run(base_params(is_public=True, skip_consent=True), client)
+
+    assert result["changed"] is True
+    body = _called(client, "update_client")[0][2]
+    assert body["skipConsent"] is True
+
+
+def test_skip_consent_unset_carried_forward_on_update():
+    # An update for another field must not reset skipConsent to false.
+    existing = {
+        "id": "c1",
+        "name": "App",
+        "callbackURLs": ["https://app.example.com/old"],
+        "isPublic": True,
+        "skipConsent": True,
+    }
+    client = FakeClient(clients=[existing])
+    result = run(base_params(is_public=True), client)
+
+    assert result["changed"] is True
+    body = _called(client, "update_client")[0][2]
+    assert body["skipConsent"] is True
+
+
+def test_skip_consent_version_absent_not_diffed():
+    existing = {
+        "id": "c1",
+        "name": "App",
+        "callbackURLs": ["https://app.example.com/cb"],
+        "isPublic": True,
+    }
+    client = FakeClient(clients=[existing])
+    result = run(base_params(is_public=True), client)
+
+    assert result["changed"] is False
 
 
 def test_allowed_groups_resolved_by_name_and_set():
